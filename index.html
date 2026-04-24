@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <!-- =========================
+       CONFIGURAÇÕES BÁSICAS
+  ========================== -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voz Urbana</title>
+
+  <!-- =========================
+       BIBLIOTECAS
+  ========================== -->
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/_sdk/element_sdk.js"></script>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+
+  <!-- =========================
+       FONTES
+  ========================== -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.cdnfonts.com/css/gliker" rel="stylesheet">
+
+  <!-- =========================
+       ESTILOS GERAIS
+  ========================== -->
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      box-sizing: border-box;
+      background: #ffffff;
+      color: #1f2937;
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    .grid-bg {
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .map-container {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .heatmap-dot {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(18px);
+      opacity: 0.7;
+      animation: pulse-dot 3s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulse-dot {
+      0% {
+        transform: scale(1);
+        opacity: 0.5;
+      }
+      100% {
+        transform: scale(1.3);
+        opacity: 0.8;
+      }
+    }
+
+    @keyframes fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(24px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .fade-up {
+      animation: fade-up 0.7s ease-out both;
+    }
+
+    .fade-up-d1 { animation-delay: 0.1s; }
+    .fade-up-d2 { animation-delay: 0.25s; }
+    .fade-up-d3 { animation-delay: 0.4s; }
+    .fade-up-d4 { animation-delay: 0.55s; }
+
+    /* =========================
+       RUAS / GRID DO MAPA
+    ========================== */
+    .street-grid {
+      position: absolute;
+      inset: 0;
+      opacity: 0.15;
+    }
+
+    .street-h,
+    .street-v {
+      position: absolute;
+      background: currentColor;
+    }
+
+    .street-h {
+      height: 2px;
+      left: 0;
+      right: 0;
+    }
+
+    .street-v {
+      width: 2px;
+      top: 0;
+      bottom: 0;
+    }
+
+    /* =========================
+       PING DOS MARCADORES
+    ========================== */
+    .tooltip-ping {
+      animation: ping-ring 2s cubic-bezier(0,0,0.2,1) infinite;
+    }
+
+    @keyframes ping-ring {
+      0% {
+        transform: scale(1);
+        opacity: 0.6;
+      }
+      75%, 100% {
+        transform: scale(2.2);
+        opacity: 0;
+      }
+    }
+
+    /* =========================
+       LINKS DO MENU
+    ========================== */
+    .nav-link {
+      position: relative;
+    }
+
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      bottom: -2px;
+      left: 0;
+      width: 0;
+      height: 2px;
+      background: currentColor;
+      transition: width 0.3s;
+    }
+
+    .nav-link:hover::after {
+      width: 100%;
+    }
+
+    /* =========================
+       EFEITO BOTÃO PRINCIPAL
+    ========================== */
+    .btn-glow:hover {
+      box-shadow: 0 0 28px rgba(var(--action-rgb), 0.4);
+    }
+
+    #real-map {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+    }
+
+    #heatmap > *:not(#real-map) {
+      z-index: 1;
+    }
+
+    .street-grid,
+    .heatmap-dot,
+    .tooltip-ping {
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body class="h-full w-full overflow-auto">
+  <!-- =========================
+       ÁREA PRINCIPAL
+  ========================== -->
+  <div id="app-wrapper" class="w-full min-h-full grid-bg" style="background:#ffffff;">
+
+    <!-- =========================
+         CABEÇALHO
+    ========================== -->
+    <nav class="w-full relative fade-up">
+
+      <!-- BARRA SUPERIOR -->
+      <div class="absolute top-0 left-0 w-full h-[93.7px] bg-[#0B2A4A]"></div>
+
+      <!-- CONTEÚDO DA BARRA -->
+      <div class="relative flex items-center justify-between px-6 md:px-12 h-[93.7px]">
+
+        <!-- LOGO LATERAL ESQUERDA -->
+        <img
+          src="./img/logo.png"
+          alt="Logo"
+          style="width:241.2px; height:48.1px; object-fit:contain;"
+        >
+
+        <!-- MENU LATERAL DIREITA -->
+        <div class="hidden md:flex items-center gap-8 text-sm text-white">
+          <a href="#" class="nav-link">Mapa</a>
+          <a href="#" class="nav-link">Reportar</a>
+          <a href="#" class="nav-link">Estatísticas</a>
+          <a href="#" class="nav-link">Sobre</a>
+        </div>
+
+        <!-- BOTÃO MENU MOBILE -->
+        <button
+          id="mobile-menu-btn"
+          class="md:hidden inline-flex items-center justify-center rounded-lg p-2 text-white transition hover:bg-white/10"
+          type="button"
+          aria-label="Abrir menu"
+          aria-expanded="false"
+          aria-controls="mobile-menu"
+        >
+          <i data-lucide="menu" style="width:24px;height:24px;"></i>
+        </button>
+
+      </div>
+    </nav>
+
+    <!-- =========================
+         MENU MOBILE
+    ========================== -->
+    <div id="mobile-menu" class="hidden w-full px-6 py-4 flex flex-col gap-3 text-sm text-white md:hidden" style="background:#0B2A4A;">
+      <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Mapa</a>
+      <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Reportar</a>
+      <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Estatísticas</a>
+      <a href="#" class="opacity-80 hover:opacity-100 py-2">Sobre</a>
+    </div>
+
+    <!-- =========================
+         CONTEÚDO PRINCIPAL
+    ========================== -->
+    <main class="w-full px-6 md:px-12 pt-8 pb-16">
+      <div class="max-w-6xl mx-auto">
+
+        <!-- =========================
+             TÍTULO E SUBTÍTULO
+        ========================== -->
+        <div class="text-center mb-10 fade-up fade-up-d1">
+
+          <!-- TÍTULO PRINCIPAL -->
+          <h1
+            id="hero-title"
+            class="text-4xl md:text-6xl font-extrabold leading-tight mb-4"
+            style="color:#0B2A4A;">
+            Voz Urbana
+          </h1>
+
+          <!-- SUBTÍTULO -->
+          <p
+            id="hero-subtitle"
+            class="text-base md:text-lg max-w-xl mx-auto"
+            style="color:#6b7280;">
+            Reporte problemas nas ruas da sua cidade e ajude a prefeitura a melhorar o seu bairro.
+          </p>
+        </div>
+
+        <!-- =========================
+             MAPA DE CALOR
+        ========================== -->
+        <div
+          id="heatmap"
+          class="fade-up fade-up-d2 map-container w-full mx-auto"
+          style="max-width:900px; height:420px; background:#f3f4f6; border:1px solid rgba(0,0,0,0.1);"
+        >
+          <div id="real-map" aria-label="Mapa real de Itaperuna"></div>
+
+          <!-- GRADE DAS RUAS -->
+          <div class="street-grid" style="color:#d1d5db;">
+            <div class="street-h" style="top:25%;"></div>
+            <div class="street-h" style="top:50%;"></div>
+            <div class="street-h" style="top:75%;"></div>
+
+            <div class="street-v" style="left:20%;"></div>
+            <div class="street-v" style="left:40%;"></div>
+            <div class="street-v" style="left:60%;"></div>
+            <div class="street-v" style="left:80%;"></div>
+
+            <div style="position:absolute;top:0;left:10%;width:2px;height:141%;background:currentColor;transform:rotate(35deg);transform-origin:top left;"></div>
+            <div style="position:absolute;top:60%;left:50%;width:2px;height:80%;background:currentColor;transform:rotate(-25deg);transform-origin:top left;"></div>
+          </div>
+
+          <!-- LEGENDA -->
+          <div
+            id="legend"
+            class="absolute bottom-4 right-4 flex items-center gap-3 px-4 py-2 rounded-lg text-xs"
+            style="background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);border:1px solid rgba(0,0,0,0.1);">
+          </div>
+
+          <!-- RÓTULO DO MAPA -->
+          <div
+            class="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium"
+            style="background:rgba(255,255,255,0.9);backdrop-filter:blur(8px);border:1px solid rgba(0,0,0,0.1); color:#1f2937;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="activity" style="width:14px;height:14px;color:#10b981;" class="lucide lucide-activity">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+            </svg>
+            Mapa de Calor — Ocorrências
+          </div>
+        </div>
+
+        <!-- =========================
+             BOTÕES DE AÇÃO
+        ========================== -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8 fade-up fade-up-d3">
+
+          <!-- BOTÃO PRINCIPAL -->
+          <button
+            id="cta-btn"
+            class="btn-glow flex items-center gap-2 px-7 py-3.5 rounded-full font-semibold text-sm transition-all duration-300"
+            style="background:#365b6d;color:#ffffff;--action-rgb:54,91,109;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="alert-circle" style="width:18px;height:18px;" class="lucide lucide-alert-circle">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" x2="12" y1="8" y2="12"></line>
+              <line x1="12" x2="12.01" y1="16" y2="16"></line>
+            </svg>
+            <span id="cta-text">Reportar Problema</span>
+          </button>
+
+          <!-- BOTÃO SECUNDÁRIO -->
+          <button
+            id="secondary-btn"
+            class="flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition-all border"
+            style="border-color:rgba(0,0,0,0.2);color:#1f2937;background:transparent;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="bar-chart-3" style="width:18px;height:18px;" class="lucide lucide-bar-chart-3">
+              <path d="M3 3v18h18"></path>
+              <path d="M18 17V9"></path>
+              <path d="M13 17V5"></path>
+              <path d="M8 17v-3"></path>
+            </svg>
+            Ver Estatísticas
+          </button>
+        </div>
+
+        <!-- =========================
+             CARDS DE ESTATÍSTICAS
+        ========================== -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-12 max-w-2xl mx-auto fade-up fade-up-d4">
+
+          <!-- CARD 1 -->
+          <div class="text-center p-5 rounded-xl" style="background:#f3f4f6;border:1px solid rgba(0,0,0,0.08);">
+            <div id="stat-1-value" class="text-2xl font-bold" style="color:#10b981;">1.247</div>
+            <div id="stat-1-label" class="text-xs mt-1" style="color:#6b7280;">Problemas Reportados</div>
+          </div>
+
+          <!-- CARD 2 -->
+          <div class="text-center p-5 rounded-xl" style="background:#f3f4f6;border:1px solid rgba(0,0,0,0.08);">
+            <div id="stat-2-value" class="text-2xl font-bold" style="color:#10b981;">892</div>
+            <div id="stat-2-label" class="text-xs mt-1" style="color:#6b7280;">Resolvidos</div>
+          </div>
+
+          <!-- CARD 3 -->
+          <div class="text-center p-5 rounded-xl" style="background:#f3f4f6;border:1px solid rgba(0,0,0,0.08);">
+            <div id="stat-3-value" class="text-2xl font-bold" style="color:#10b981;">15</div>
+            <div id="stat-3-label" class="text-xs mt-1" style="color:#6b7280;">Bairros Ativos</div>
+          </div>
+
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    /* =========================
+       MAPA REAL
+    ========================== */
+    const realMapEl = document.getElementById('real-map');
+    if (realMapEl && window.L) {
+      const realMap = L.map(realMapEl, {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([-21.1986, -41.8904], 14);
+
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(realMap);
+
+      L.control.attribution({ prefix: false })
+        .addAttribution('&copy; OpenStreetMap')
+        .addTo(realMap);
+
+      setTimeout(() => realMap.invalidateSize(), 300);
+    }
+
+    /* =========================
+       INICIAR ÍCONES LUCIDE
+    ========================== */
+    lucide.createIcons();
+
+    /* =========================
+       MENU MOBILE
+       Só ativa se o botão existir
+    ========================== */
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    if (mobileMenuBtn) {
+      mobileMenuBtn.addEventListener('click', () => {
+        const mobileMenu = document.getElementById('mobile-menu');
+        const isOpen = mobileMenu.classList.toggle('hidden') === false;
+        mobileMenuBtn.setAttribute('aria-expanded', String(isOpen));
+      });
+    }
+
+    /* =========================
+       CONFIGURAÇÃO PADRÃO
+    ========================== */
+    const defaultConfig = {
+      background_color: '#ffffff',
+      surface_color: '#f3f4f6',
+      text_color: '#1f2937',
+      primary_action: '#365b6d',
+      secondary_action: '#6b7280',
+      font_family: 'Gliker',
+      font_size: 16,
+      site_title: 'Voz Urbana',
+      site_subtitle: 'Reporte problemas nas ruas da sua cidade e ajude a prefeitura a melhorar o seu bairro.',
+      cta_text: 'Reportar Problema',
+      stat_1_value: '1.247',
+      stat_1_label: 'Problemas Reportados',
+      stat_2_value: '892',
+      stat_2_label: 'Resolvidos',
+      stat_3_value: '15',
+      stat_3_label: 'Bairros Ativos'
+    };
+
+    /* =========================
+       APLICAR CONFIGURAÇÕES
+    ========================== */
+    function applyConfig(c) {
+      const bg = c.background_color || defaultConfig.background_color;
+      const surface = c.surface_color || defaultConfig.surface_color;
+      const text = c.text_color || defaultConfig.text_color;
+      const action = c.primary_action || defaultConfig.primary_action;
+      const secondary = c.secondary_action || defaultConfig.secondary_action;
+      const baseSize = c.font_size || defaultConfig.font_size;
+
+      /* FUNDO GERAL */
+      document.body.style.background = bg;
+      document.body.style.color = text;
+      document.getElementById('app-wrapper').style.background = bg;
+
+      /* TÍTULO PRINCIPAL */
+      const heroTitle = document.getElementById('hero-title');
+      heroTitle.textContent = c.site_title || defaultConfig.site_title;
+      heroTitle.style.color = '#0B2A4A';
+      heroTitle.style.fontFamily = "'Gliker', sans-serif";
+      heroTitle.style.fontSize = (baseSize * 3) + 'px';
+
+      /* SUBTÍTULO */
+      const sub = document.getElementById('hero-subtitle');
+      sub.textContent = c.site_subtitle || defaultConfig.site_subtitle;
+      sub.style.color = secondary;
+      sub.style.fontSize = baseSize + 'px';
+
+      /* BOTÃO PRINCIPAL */
+      document.getElementById('cta-btn').style.background = action;
+      document.getElementById('cta-btn').style.color = bg;
+      document.getElementById('cta-text').textContent = c.cta_text || defaultConfig.cta_text;
+
+      /* BOTÃO SECUNDÁRIO */
+      document.getElementById('secondary-btn').style.color = text;
+      document.getElementById('secondary-btn').style.borderColor = text + '33';
+
+      /* MAPA */
+      document.getElementById('heatmap').style.background = surface;
+
+      /* CARDS */
+      document.querySelectorAll('.grid.grid-cols-1 > div').forEach(el => {
+        el.style.background = surface;
+      });
+
+      /* ESTATÍSTICAS */
+      ['1', '2', '3'].forEach(n => {
+        const val = document.getElementById('stat-' + n + '-value');
+        const lbl = document.getElementById('stat-' + n + '-label');
+
+        val.textContent = c['stat_' + n + '_value'] || defaultConfig['stat_' + n + '_value'];
+        val.style.color = action;
+        val.style.fontSize = (baseSize * 1.5) + 'px';
+
+        lbl.textContent = c['stat_' + n + '_label'] || defaultConfig['stat_' + n + '_label'];
+        lbl.style.color = secondary;
+        lbl.style.fontSize = (baseSize * 0.75) + 'px';
+      });
+    }
+
+    /* =========================
+       INICIAR ELEMENT SDK
+    ========================== */
+    if (window.elementSdk) {
+    window.elementSdk.init({
+      defaultConfig,
+      onConfigChange: async (config) => applyConfig(config),
+      mapToCapabilities: (config) => ({
+        recolorables: [
+          {
+            get: () => config.background_color || defaultConfig.background_color,
+            set: v => {
+              config.background_color = v;
+              window.elementSdk.setConfig({ background_color: v });
+            }
+          },
+          {
+            get: () => config.surface_color || defaultConfig.surface_color,
+            set: v => {
+              config.surface_color = v;
+              window.elementSdk.setConfig({ surface_color: v });
+            }
+          },
+          {
+            get: () => config.text_color || defaultConfig.text_color,
+            set: v => {
+              config.text_color = v;
+              window.elementSdk.setConfig({ text_color: v });
+            }
+          },
+          {
+            get: () => config.primary_action || defaultConfig.primary_action,
+            set: v => {
+              config.primary_action = v;
+              window.elementSdk.setConfig({ primary_action: v });
+            }
+          },
+          {
+            get: () => config.secondary_action || defaultConfig.secondary_action,
+            set: v => {
+              config.secondary_action = v;
+              window.elementSdk.setConfig({ secondary_action: v });
+            }
+          }
+        ],
+        borderables: [],
+        fontEditable: {
+          get: () => config.font_family || defaultConfig.font_family,
+          set: v => {
+            config.font_family = v;
+            window.elementSdk.setConfig({ font_family: v });
+          }
+        },
+        fontSizeable: {
+          get: () => config.font_size || defaultConfig.font_size,
+          set: v => {
+            config.font_size = v;
+            window.elementSdk.setConfig({ font_size: v });
+          }
+        }
+      }),
+      mapToEditPanelValues: (config) => new Map([
+        ['site_title', config.site_title || defaultConfig.site_title],
+        ['site_subtitle', config.site_subtitle || defaultConfig.site_subtitle],
+        ['cta_text', config.cta_text || defaultConfig.cta_text],
+        ['stat_1_value', config.stat_1_value || defaultConfig.stat_1_value],
+        ['stat_1_label', config.stat_1_label || defaultConfig.stat_1_label],
+        ['stat_2_value', config.stat_2_value || defaultConfig.stat_2_value],
+        ['stat_2_label', config.stat_2_label || defaultConfig.stat_2_label],
+        ['stat_3_value', config.stat_3_value || defaultConfig.stat_3_value],
+        ['stat_3_label', config.stat_3_label || defaultConfig.stat_3_label]
+      ])
+    });
+    }
+
+    /* =========================
+       APLICAR CONFIGURAÇÃO INICIAL
+    ========================== */
+    applyConfig(defaultConfig);
+  </script>
+</body>
+</html>
