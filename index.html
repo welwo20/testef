@@ -240,10 +240,51 @@
     ========================== -->
     <div id="mobile-menu" class="hidden w-full px-6 py-4 flex flex-col gap-3 text-sm text-white md:hidden" style="background:#0B2A4A;">
       <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Mapa</a>
-      <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Reportar</a>
+      <a href="#" class="btn-abrir-modal opacity-80 hover:opacity-100 py-2 border-b border-white/10">Reportar</a>
       <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Estatísticas</a>
-      <a href="#" class="opacity-80 hover:opacity-100 py-2">Sobre</a>
+      <a href="#" class="opacity-80 hover:opacity-100 py-2">Sobre</a> 
     </div>
+    
+    <!--FUNÇÃO REPORTAR-->
+
+<div id="modal-reportar" class="hidden fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl scale-in-center">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-[#0B2A4A]">Novo Relato</h2>
+      <button id="btn-fechar-modal" class="text-gray-400 hover:text-gray-600">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <form id="form-incidente" class="space-y-5">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Tipo de Ocorrência</label>
+        <select id="input-categoria" required class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
+          <option value="">Selecione...</option>
+          <option value="Iluminação">Falta de Iluminação</option>
+          <option value="Infraestrutura">Buraco ou Via Danificada</option>
+          <option value="Limpeza">Descarte de Lixo / Entulho</option>
+          <option value="Segurança">Ponto de Insegurança</option>
+          <option value="Segurança">outros</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Descrição Detalhada</label>
+        <textarea id="input-descricao" rows="3" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Conte o que está acontecendo..."></textarea>
+      </div>
+
+      <div class="text-[11px] text-emerald-600 font-bold bg-emerald-50 p-3 rounded-lg flex items-center gap-2 border border-emerald-100">
+        <i data-lucide="map-pin" class="w-4 h-4"></i>
+        <span>GEOLOCALIZAÇÃO ATIVA: O GPS SERÁ CAPTURADO AO ENVIAR</span>
+      </div>
+
+      <button type="submit" id="btn-enviar-relato" class="w-full bg-[#365b6d] text-white font-bold py-4 rounded-xl hover:bg-[#284655] transition-all shadow-lg flex justify-center items-center gap-2">
+        Enviar para a Prefeitura
+      </button>
+    </form>
+  </div>
+</div>
 
     <!-- =========================
          CONTEÚDO PRINCIPAL
@@ -378,26 +419,154 @@
   </div>
 
   <script>
+
+
+
+/* =============================================
+   FUNÇÃO PARA BUSCAR DADOS REAIS DA PLANILHA
+================================================ */
+async function atualizarEstatisticas() {
+  try {
+    // Tenta buscar os dados no backend local
+    const resposta = await fetch('http://localhost:3000/api/estatisticas');
+    
+    if (!resposta.ok) throw new Error('Erro na requisição');
+    
+    const dados = await resposta.json();
+
+    // Substitui os valores nos cards
+    document.getElementById('stat-1-value').textContent = dados.total;
+    document.getElementById('stat-2-value').textContent = dados.resolvidos;
+    document.getElementById('stat-3-value').textContent = dados.bairros;
+
+    console.log("📊 Estatísticas atualizadas com sucesso!");
+
+  } catch (error) {
+    console.error("❌ Não foi possível carregar as estatísticas reais:", error);
+    // Caso dê erro (servidor desligado), os valores padrão continuam lá.
+  }
+}
+
+// Inicia a busca assim que a página termina de carregar
+window.addEventListener('DOMContentLoaded', atualizarEstatisticas);
+
+
+/* =============================================
+   LÓGICA DE ENVIO DE RELATOS 
+================================================ */
+const modal = document.getElementById('modal-reportar');
+const btnAbrir = document.getElementById('cta-btn'); 
+const btnFechar = document.getElementById('btn-fechar-modal');
+const formIncidente = document.getElementById('form-incidente');
+
+// Controle do Modal
+btnAbrir.onclick = () => modal.classList.remove('hidden');
+btnFechar.onclick = () => modal.classList.add('hidden');
+
+// Envio Georreferenciado
+formIncidente.onsubmit = async (e) => {
+  e.preventDefault();
+  
+  const btnSubmit = document.getElementById('btn-enviar-relato');
+  const textoOriginal = btnSubmit.innerText;
+  
+  btnSubmit.disabled = true;
+  btnSubmit.innerText = "📍 Obtendo Localização...";
+
+  // Captura o GPS
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const dadosRelato = {
+      lat: pos.coords.latitude,
+      lng: pos.coords.longitude,
+      categoria: document.getElementById('input-categoria').value,
+      descricao: document.getElementById('input-descricao').value
+    };
+
+    try {
+      btnSubmit.innerText = "🚀 Enviando para o Servidor...";
+      
+      const resposta = await fetch('http://localhost:3000/api/incidentes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dadosRelato)
+      });
+
+      if (resposta.ok) {
+        const resultado = await resposta.json();
+        alert(`✅ Sucesso! Problema registrado em ${resultado.bairro}.`);
+        
+        modal.classList.add('hidden');
+        formIncidente.reset();
+        
+        // Atualiza os números nos cards
+        if(typeof atualizarEstatisticas === 'function') atualizarEstatisticas();
+        
+        // Atualiza os pinos no mapa
+        if(typeof carregarMarcadoresNoMapa === 'function') {
+           carregarMarcadoresNoMapa(realMap); 
+        }
+      }
+    } catch (err) {
+      alert("❌ Erro de conexão. O backend está ligado?");
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = textoOriginal;
+    }
+  }, (erroGps) => {
+    alert("⚠️ Precisamos do GPS para validar o local do problema!");
+    btnSubmit.disabled = false;
+    btnSubmit.innerText = textoOriginal;
+  });
+};
+
+
+/* =========================
+   MARCADORES REAIS NO MAPA
+========================== */
+async function carregarMarcadoresNoMapa(mapa) {
+  const res = await fetch('http://localhost:3000/api/pontos-mapa');
+  const pontos = await res.json();
+  
+  pontos.forEach(p => {
+
+    L.circleMarker([p.lat, p.lng], {
+      radius: 10,
+      fillColor: p.status.toLowerCase() === 'resolvido' ? "#10b981" : "#ef4444",
+      color: "#fff",
+      weight: 2,
+      fillOpacity: 0.8
+    })
+    .addTo(mapa)
+    .bindPopup(`<b>${p.categoria}</b><br>Status: ${p.status}`);
+  });
+}
+
+
     /* =========================
-       MAPA REAL
-    ========================== */
-    const realMapEl = document.getElementById('real-map');
-    if (realMapEl && window.L) {
-      const realMap = L.map(realMapEl, {
+      MAPA REAL
+========================== */
+const realMapEl = document.getElementById('real-map');
+let realMap;
+
+if (realMapEl && window.L) {
+    realMap = L.map(realMapEl, {
         zoomControl: true,
         attributionControl: false
-      }).setView([-21.1986, -41.8904], 14);
+    }).setView([-21.1986, -41.8904], 14);
 
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19
-      }).addTo(realMap);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(realMap);
 
-      L.control.attribution({ prefix: false })
+    L.control.attribution({ prefix: false })
         .addAttribution('&copy; OpenStreetMap')
         .addTo(realMap);
+    carregarMarcadoresNoMapa(realMap);
 
-      setTimeout(() => realMap.invalidateSize(), 300);
-    }
+    setTimeout(() => realMap.invalidateSize(), 300);
+}
 
     /* =========================
        INICIAR ÍCONES LUCIDE
@@ -408,14 +577,37 @@
        MENU MOBILE
        Só ativa se o botão existir
     ========================== */
-    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
-    if (mobileMenuBtn) {
-      mobileMenuBtn.addEventListener('click', () => {
-        const mobileMenu = document.getElementById('mobile-menu');
-        const isOpen = mobileMenu.classList.toggle('hidden') === false;
-        mobileMenuBtn.setAttribute('aria-expanded', String(isOpen));
-      });
+
+const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+const mobileMenu = document.getElementById('mobile-menu');
+
+// Lógica Abrir/Fechar o Menu Mobile
+if (mobileMenuBtn && mobileMenu) {
+  mobileMenuBtn.addEventListener('click', () => {
+    const isOpen = mobileMenu.classList.toggle('hidden') === false;
+    mobileMenuBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+}
+
+//Lógica Ativar todos os botões "Reportar"
+const botoesReportar = document.querySelectorAll('#cta-btn, .btn-abrir-modal');
+
+botoesReportar.forEach(botao => {
+  botao.onclick = (e) => {
+    e.preventDefault(); // Impede o link de dar refresh na página
+    
+    // Abre o modal de relato
+    if (modal) modal.classList.remove('hidden');
+    
+    // Fecha o menu mobile automaticamente para o usuário ver o formulário
+    if (mobileMenu) {
+      mobileMenu.classList.add('hidden');
+      if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', 'false');
     }
+    
+    console.log("?? Formulário de reporte aberto com sucesso!");
+  };
+});
 
     /* =========================
        CONFIGURAÇÃO PADRÃO
@@ -472,10 +664,6 @@
       document.getElementById('cta-btn').style.background = action;
       document.getElementById('cta-btn').style.color = bg;
       document.getElementById('cta-text').textContent = c.cta_text || defaultConfig.cta_text;
-
-      /* BOTÃO SECUNDÁRIO */
-      document.getElementById('secondary-btn').style.color = text;
-      document.getElementById('secondary-btn').style.borderColor = text + '33';
 
       /* MAPA */
       document.getElementById('heatmap').style.background = surface;
