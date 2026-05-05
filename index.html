@@ -15,8 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="/_sdk/element_sdk.js"></script>
-  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <!-- Scripts /_sdk removidos: eles só existem no ambiente do editor original e causavam erro local/Vercel -->
 
   <!-- =========================
        FONTES
@@ -420,7 +419,7 @@
 
   <script>
 
-
+const API_URL = "https://backend-render-a8ee.onrender.com";
 
 /* =============================================
    FUNÇÃO PARA BUSCAR DADOS REAIS DA PLANILHA
@@ -428,7 +427,7 @@
 async function atualizarEstatisticas() {
   try {
     // Tenta buscar os dados no backend local
-    const resposta = await fetch('http://localhost:3000/api/estatisticas');
+    const resposta = await fetch(`${API_URL}/api/estatisticas`);
     
     if (!resposta.ok) throw new Error('Erro na requisição');
     
@@ -485,7 +484,7 @@ formIncidente.onsubmit = async (e) => {
     try {
       btnSubmit.innerText = "🚀 Enviando para o Servidor...";
       
-      const resposta = await fetch('http://localhost:3000/api/incidentes', {
+      const resposta = await fetch(`${API_URL}/api/incidentes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dadosRelato)
@@ -524,10 +523,12 @@ formIncidente.onsubmit = async (e) => {
    MARCADORES REAIS NO MAPA
 ========================== */
 async function carregarMarcadoresNoMapa(mapa) {
-  const res = await fetch('http://localhost:3000/api/pontos-mapa');
-  const pontos = await res.json();
+  try {
+    const res = await fetch(`${API_URL}/api/pontos-mapa`);
+    if (!res.ok) throw new Error('Erro ao buscar pontos do mapa');
+    const pontos = await res.json();
   
-  pontos.forEach(p => {
+    pontos.forEach(p => {
 
     L.circleMarker([p.lat, p.lng], {
       radius: 10,
@@ -538,7 +539,10 @@ async function carregarMarcadoresNoMapa(mapa) {
     })
     .addTo(mapa)
     .bindPopup(`<b>${p.categoria}</b><br>Status: ${p.status}`);
-  });
+    });
+  } catch (error) {
+    console.error('❌ Não foi possível carregar os pontos do mapa:', error);
+  }
 }
 
 
