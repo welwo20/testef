@@ -1,4 +1,6 @@
 const ITAPERUNA = [-21.1986, -41.8904];
+const API_URL = "https://backend-render-a8ee.onrender.com";
+
 const map = L.map("map", { zoomControl: true }).setView(ITAPERUNA, 14);
 let markers = L.layerGroup().addTo(map);
 let heatLayer = null;
@@ -49,15 +51,18 @@ function renderIncidents(incidents) {
       longitude: Number(item.longitude)
     }))
     .filter((item) => Number.isFinite(item.latitude) && Number.isFinite(item.longitude));
+
   const points = validIncidents.map((item) => [item.latitude, item.longitude, 0.8]);
 
   if (points.length) {
     heatLayer = L.heatLayer(points, { radius: 28, blur: 18, minOpacity: 0.45 }).addTo(map);
+
     validIncidents.forEach((item) => {
       L.marker([item.latitude, item.longitude])
         .bindPopup(`<strong>${item.categoria}</strong><br>${item.descricao || "Sem descrição"}<br><small>${item.dataHora || ""}</small>`)
         .addTo(markers);
     });
+
     map.fitBounds(points.map(([lat, lng]) => [lat, lng]), { padding: [35, 35], maxZoom: 15 });
   }
 
@@ -68,8 +73,8 @@ function renderIncidents(incidents) {
 
 async function loadData() {
   const [incidentsRes, statsRes] = await Promise.all([
-    fetch("/api/incidents"),
-    fetch("/api/stats")
+    fetch(`${API_URL}/api/incidents`),
+    fetch(`${API_URL}/api/stats`)
   ]);
 
   if (!incidentsRes.ok || !statsRes.ok) {
@@ -78,6 +83,7 @@ async function loadData() {
 
   const incidents = await incidentsRes.json();
   const stats = await statsRes.json();
+
   renderIncidents(incidents);
   $("#total-incidents").textContent = stats.total;
   $("#total-neighborhoods").textContent = stats.bairrosAtivos;
@@ -87,11 +93,13 @@ async function loadData() {
 async function submitReport(event) {
   event.preventDefault();
   const data = Object.fromEntries(new FormData(form).entries());
-  const response = await fetch("/api/incidents", {
+
+  const response = await fetch(`${API_URL}/api/incidents`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
   });
+
   const payload = await response.json();
 
   if (!response.ok) {
@@ -130,14 +138,18 @@ $("#open-report").addEventListener("click", () => {
   setLocation(...ITAPERUNA);
   openModal();
 });
+
 $("#close-report").addEventListener("click", closeModal);
 $("#locate-btn").addEventListener("click", requestLocation);
+
 modal.addEventListener("click", (event) => {
   if (event.target === modal) closeModal();
 });
+
 form.addEventListener("submit", submitReport);
 
 lucide.createIcons();
+
 loadData().catch((error) => {
   $("#status-text").textContent = error.message;
 });
