@@ -1,5 +1,5 @@
 const ITAPERUNA = [-21.1986, -41.8904];
-const API_URL = "https://backend-render-a8ee.onrender.com";
+const API_URL = "https://backend-render-t8c4.onrender.com";
 
 const map = L.map("map", { zoomControl: true }).setView(ITAPERUNA, 14);
 let markers = L.layerGroup().addTo(map);

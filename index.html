@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR" class="h-full">
 <head>
   <!-- =========================
@@ -184,6 +184,42 @@
     .tooltip-ping {
       pointer-events: none;
     }
+
+    .map-lock-overlay {
+      display: none;
+    }
+
+    @media (max-width: 767px) {
+      .map-lock-overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 5;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(11, 42, 74, 0.08);
+        color: #0B2A4A;
+        text-align: center;
+        font-size: 0.8rem;
+        font-weight: 700;
+        pointer-events: auto;
+        touch-action: manipulation;
+      }
+
+      .map-lock-overlay.hidden {
+        display: none;
+      }
+
+      .map-lock-overlay span {
+        max-width: 240px;
+        border-radius: 999px;
+        border: 1px solid rgba(11, 42, 74, 0.16);
+        background: rgba(255, 255, 255, 0.94);
+        padding: 0.7rem 1rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+      }
+    }
   </style>
 </head>
 
@@ -213,7 +249,7 @@
 
         <!-- MENU LATERAL DIREITA -->
         <div class="hidden md:flex items-center gap-8 text-sm text-white">
-          <a href="#" class="nav-link">Mapa</a>
+          <a href="#heatmap" class="nav-link btn-abrir-mapa">Mapa</a>
           <a href="#" class="nav-link">Reportar</a>
           <a href="#" class="nav-link">Estatísticas</a>
           <a href="#" class="nav-link">Sobre</a>
@@ -238,13 +274,35 @@
          MENU MOBILE
     ========================== -->
     <div id="mobile-menu" class="hidden w-full px-6 py-4 flex flex-col gap-3 text-sm text-white md:hidden" style="background:#0B2A4A;">
-      <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Mapa</a>
+      <a href="#heatmap" class="btn-abrir-mapa opacity-80 hover:opacity-100 py-2 border-b border-white/10">Mapa</a>
       <a href="#" class="btn-abrir-modal opacity-80 hover:opacity-100 py-2 border-b border-white/10">Reportar</a>
       <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Estatísticas</a>
       <a href="#" class="opacity-80 hover:opacity-100 py-2">Sobre</a> 
     </div>
     
     <!--FUNÇÃO REPORTAR-->
+
+<div id="modal-escolher-local" class="hidden fixed inset-0 bg-black/60 z-[9998] flex items-center justify-center p-4 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl scale-in-center">
+    <div class="flex justify-between items-start gap-4 mb-6">
+      <h2 class="text-2xl font-bold text-[#0B2A4A]">Como deseja informar o local?</h2>
+      <button id="btn-fechar-escolha-local" class="text-gray-400 hover:text-gray-600" type="button" aria-label="Fechar">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <div class="space-y-3">
+      <button id="btn-usar-localizacao" type="button" class="w-full bg-[#365b6d] text-white font-bold py-4 rounded-xl hover:bg-[#284655] transition-all shadow-lg flex justify-center items-center gap-2">
+        <i data-lucide="navigation" class="w-5 h-5"></i>
+        Usar localização atual
+      </button>
+      <button id="btn-digitar-local" type="button" class="w-full bg-white text-[#365b6d] font-bold py-4 rounded-xl border border-[#365b6d]/30 hover:bg-[#f3f7f9] transition-all flex justify-center items-center gap-2">
+        <i data-lucide="keyboard" class="w-5 h-5"></i>
+        Digitar manualmente
+      </button>
+    </div>
+  </div>
+</div>
 
 <div id="modal-reportar" class="hidden fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
   <div class="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl scale-in-center">
@@ -278,10 +336,75 @@
         <span>GEOLOCALIZAÇÃO ATIVA: O GPS SERÁ CAPTURADO AO ENVIAR</span>
       </div>
 
+      <div id="campos-local-manual" class="hidden space-y-4">
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Cidade</label>
+          <div class="relative">
+            <input id="input-cidade-manual" disabled class="w-full border border-gray-300 rounded-xl p-3 pr-12 bg-gray-100 text-gray-600 font-semibold">
+            <img src="img/cadeado.png" alt="Cidade bloqueada" class="absolute right-4 top-1/2 h-8 w-10 -translate-y-1/2">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Bairro</label>
+          <input id="input-bairro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Informe o bairro">
+        </div>
+
+        <div>
+          <label class="block text-sm font-semibold text-gray-700 mb-1">Logradouro</label>
+          <input id="input-logradouro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Rua, avenida ou ponto de referência">
+        </div>
+      </div>
+
       <button type="submit" id="btn-enviar-relato" class="w-full bg-[#365b6d] text-white font-bold py-4 rounded-xl hover:bg-[#284655] transition-all shadow-lg flex justify-center items-center gap-2">
         Enviar para a Prefeitura
       </button>
     </form>
+  </div>
+</div>
+
+<!-- =========================
+     CONFIRMAÇÃO DE ENDEREÇO
+========================== -->
+<div id="modal-confirmar-endereco" class="hidden fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm">
+  <div class="bg-white rounded-2xl p-8 w-full max-w-md shadow-2xl fade-up">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-2xl font-bold text-[#0B2A4A] flex items-center gap-2">
+        <i data-lucide="map-pin" class="w-6 h-6 text-emerald-600"></i>
+        Confirmar endereço
+      </h2>
+      <button id="btn-cancelar-endereco" class="text-gray-400 hover:text-gray-600" type="button">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+
+    <div class="bg-emerald-50 border border-emerald-100 text-emerald-700 text-xs font-bold p-3 rounded-lg mb-5 text-center">
+      LOCALIZAÇÃO VALIDADA PELO GPS
+    </div>
+
+    <div class="space-y-4">
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Cidade bloqueada</label>
+        <div class="relative">
+          <input id="confirm-cidade" disabled class="w-full border border-gray-300 rounded-xl p-3 pr-12 bg-gray-100 text-gray-600 font-semibold">
+          <img src="img/cadeado.png" alt="Cidade bloqueada" class="absolute right-4 top-1/2 h-8 w-10 -translate-y-1/2">
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Bairro</label>
+        <input id="confirm-bairro" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
+      </div>
+
+      <div>
+        <label class="block text-sm font-semibold text-gray-700 mb-1">Logradouro</label>
+        <input id="confirm-logradouro" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
+      </div>
+
+      <button id="btn-confirmar-endereco" type="button" class="w-full bg-[#365b6d] text-white font-bold py-4 rounded-xl hover:bg-[#284655] transition-all shadow-lg">
+        Confirmar e Enviar
+      </button>
+    </div>
   </div>
 </div>
 
@@ -322,6 +445,9 @@
           style="max-width:900px; height:420px; background:#f3f4f6; border:1px solid rgba(0,0,0,0.1);"
         >
           <div id="real-map" aria-label="Mapa real de Itaperuna"></div>
+          <button id="map-lock-overlay" class="map-lock-overlay" type="button" aria-label="Desbloquear movimentação do mapa">
+            <span>Dê 2 toques para mover o mapa</span>
+          </button>
 
           <!-- GRADE DAS RUAS -->
           <div class="street-grid" style="color:#d1d5db;">
@@ -454,69 +580,296 @@ window.addEventListener('DOMContentLoaded', atualizarEstatisticas);
    LÓGICA DE ENVIO DE RELATOS 
 ================================================ */
 const modal = document.getElementById('modal-reportar');
+const modalEscolherLocal = document.getElementById('modal-escolher-local');
 const btnAbrir = document.getElementById('cta-btn'); 
 const btnFechar = document.getElementById('btn-fechar-modal');
 const formIncidente = document.getElementById('form-incidente');
+const btnFecharEscolhaLocal = document.getElementById('btn-fechar-escolha-local');
+const btnUsarLocalizacao = document.getElementById('btn-usar-localizacao');
+const btnDigitarLocal = document.getElementById('btn-digitar-local');
+const camposLocalManual = document.getElementById('campos-local-manual');
+const inputCategoria = document.getElementById('input-categoria');
+const inputDescricao = document.getElementById('input-descricao');
+const inputCidadeManual = document.getElementById('input-cidade-manual');
+const inputBairroManual = document.getElementById('input-bairro-manual');
+const inputLogradouroManual = document.getElementById('input-logradouro-manual');
+const avisoLocalizacao = document.querySelector('#modal-reportar [data-lucide="map-pin"]')?.nextElementSibling;
+let modoLocalizacao = 'gps';
 
 // Controle do Modal
-btnAbrir.onclick = () => modal.classList.remove('hidden');
-btnFechar.onclick = () => modal.classList.add('hidden');
+function abrirEscolhaLocal() {
+  if (modalEscolherLocal) modalEscolherLocal.classList.remove('hidden');
+  lucide.createIcons();
+}
 
-// Envio Georreferenciado
-formIncidente.onsubmit = async (e) => {
-  e.preventDefault();
-  
+function configurarModoLocalizacao(modo) {
+  modoLocalizacao = modo;
+  const modoManual = modo === 'manual';
+
+  if (inputCidadeManual) inputCidadeManual.value = CIDADE_PERMITIDA;
+  if (inputBairroManual) inputBairroManual.required = modoManual;
+  if (inputLogradouroManual) inputLogradouroManual.required = modoManual;
+  if (camposLocalManual) camposLocalManual.classList.toggle('hidden', !modoManual);
+  if (avisoLocalizacao) {
+    avisoLocalizacao.innerText = modoManual
+      ? 'LOCALIZAÇÃO MANUAL: INFORME BAIRRO E LOGRADOURO ABAIXO'
+      : 'GEOLOCALIZAÇÃO ATIVA: O GPS SERÁ CAPTURADO AO ENVIAR';
+  }
+}
+
+function abrirFormularioRelato(modo = 'gps') {
+  configurarModoLocalizacao(modo);
+  if (modalEscolherLocal) modalEscolherLocal.classList.add('hidden');
+  if (modal) modal.classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function descricaoObrigatoriaParaCategoria() {
+  const opcaoSelecionada = inputCategoria?.selectedOptions?.[0];
+  const textoOpcao = opcaoSelecionada?.textContent || inputCategoria?.value || '';
+  return normalizarTexto(textoOpcao) === 'OUTROS';
+}
+
+function atualizarObrigatoriedadeDescricao() {
+  if (!inputDescricao) return;
+  const descricaoObrigatoria = descricaoObrigatoriaParaCategoria();
+  inputDescricao.required = descricaoObrigatoria;
+  inputDescricao.placeholder = descricaoObrigatoria
+    ? 'Descreva o problema para continuar...'
+    : 'Conte o que está acontecendo...';
+}
+
+btnAbrir.onclick = abrirEscolhaLocal;
+btnFechar.onclick = () => modal.classList.add('hidden');
+btnFecharEscolhaLocal.addEventListener('click', () => modalEscolherLocal.classList.add('hidden'));
+btnUsarLocalizacao.addEventListener('click', () => abrirFormularioRelato('gps'));
+btnDigitarLocal.addEventListener('click', () => abrirFormularioRelato('manual'));
+inputCategoria.addEventListener('change', atualizarObrigatoriedadeDescricao);
+
+// Cidade permitida para registrar relatos.
+
+const CIDADE_PERMITIDA = "ITAPERUNA";
+
+const modalConfirmarEndereco = document.getElementById('modal-confirmar-endereco');
+const btnConfirmarEndereco = document.getElementById('btn-confirmar-endereco');
+const btnCancelarEndereco = document.getElementById('btn-cancelar-endereco');
+let relatoPendente = null;
+
+function normalizarTexto(texto) {
+  return String(texto || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+}
+
+async function buscarEnderecoPorGps(lat, lng) {
+  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
+  const resposta = await fetch(url, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!resposta.ok) {
+    throw new Error('Não foi possível validar o endereço.');
+  }
+
+  const dados = await resposta.json();
+  const address = dados.address || {};
+
+  const cidade =
+    address.city ||
+    address.town ||
+    address.village ||
+    address.municipality ||
+    address.county ||
+    '';
+
+  const bairro =
+    address.suburb ||
+    address.neighbourhood ||
+    address.city_district ||
+    address.quarter ||
+    'Centro/Geral';
+
+  const logradouro =
+    address.road ||
+    address.pedestrian ||
+    address.footway ||
+    address.cycleway ||
+    'Logradouro não identificado';
+
+  return {
+    cidade,
+    bairro,
+    logradouro,
+    enderecoCompleto: dados.display_name || ''
+  };
+}
+
+function abrirConfirmacaoEndereco(endereco) {
+  document.getElementById('confirm-cidade').value = endereco.cidade || CIDADE_PERMITIDA;
+  document.getElementById('confirm-bairro').value = endereco.bairro || '';
+  document.getElementById('confirm-logradouro').value = endereco.logradouro || '';
+  modalConfirmarEndereco.classList.remove('hidden');
+  lucide.createIcons();
+}
+
+async function enviarRelatoConfirmado() {
+  if (!relatoPendente) return;
+
   const btnSubmit = document.getElementById('btn-enviar-relato');
   const textoOriginal = btnSubmit.innerText;
-  
+
+  try {
+    btnConfirmarEndereco.disabled = true;
+    btnConfirmarEndereco.innerText = '🚀 Enviando...';
+
+    relatoPendente.bairroConfirmado = document.getElementById('confirm-bairro').value;
+    relatoPendente.logradouroConfirmado = document.getElementById('confirm-logradouro').value;
+    relatoPendente.cidadeConfirmada = CIDADE_PERMITIDA;
+
+    const resposta = await fetch(`${API_URL}/api/incidentes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(relatoPendente)
+    });
+
+    const resultado = await resposta.json().catch(() => ({}));
+
+    if (!resposta.ok) {
+      throw new Error(resultado.erro || 'Erro ao gravar o relato.');
+    }
+
+    alert(`✅ Sucesso! Problema registrado em ${resultado.bairro || relatoPendente.bairroConfirmado}.`);
+
+    modalConfirmarEndereco.classList.add('hidden');
+    modal.classList.add('hidden');
+    formIncidente.reset();
+    relatoPendente = null;
+
+    if (typeof atualizarEstatisticas === 'function') atualizarEstatisticas();
+
+    if (typeof carregarMarcadoresNoMapa === 'function') {
+      carregarMarcadoresNoMapa(realMap);
+    }
+  } catch (err) {
+    alert(`❌ ${err.message}`);
+  } finally {
+    btnConfirmarEndereco.disabled = false;
+    btnConfirmarEndereco.innerText = 'Confirmar e Enviar';
+    btnSubmit.disabled = false;
+    btnSubmit.innerText = textoOriginal;
+  }
+}
+
+btnConfirmarEndereco.addEventListener('click', enviarRelatoConfirmado);
+
+btnCancelarEndereco.addEventListener('click', () => {
+  modalConfirmarEndereco.classList.add('hidden');
+  relatoPendente = null;
+  const btnSubmit = document.getElementById('btn-enviar-relato');
+  btnSubmit.disabled = false;
+  btnSubmit.innerText = 'Enviar para a Prefeitura';
+});
+
+// Envio Georreferenciado com confirmação de endereço
+formIncidente.onsubmit = async (e) => {
+  e.preventDefault();
+  atualizarObrigatoriedadeDescricao();
+
+  if (descricaoObrigatoriaParaCategoria() && !inputDescricao.value.trim()) {
+    inputDescricao.setCustomValidity('Preencha a descrição quando selecionar outros.');
+    inputDescricao.reportValidity();
+    inputDescricao.setCustomValidity('');
+    inputDescricao.focus();
+    return;
+  }
+
+  const btnSubmit = document.getElementById('btn-enviar-relato');
+  const textoOriginal = btnSubmit.innerText;
+
   btnSubmit.disabled = true;
   btnSubmit.innerText = "📍 Obtendo Localização...";
 
-  // Captura o GPS
-  navigator.geolocation.getCurrentPosition(async (pos) => {
-    const dadosRelato = {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      categoria: document.getElementById('input-categoria').value,
-      descricao: document.getElementById('input-descricao').value
-    };
-
+  if (modoLocalizacao === 'manual') {
     try {
-      btnSubmit.innerText = "🚀 Enviando para o Servidor...";
-      
+      btnSubmit.innerText = "Enviando...";
+
       const resposta = await fetch(`${API_URL}/api/incidentes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dadosRelato)
+        body: JSON.stringify({
+          categoria: inputCategoria.value,
+          descricao: inputDescricao.value,
+          cidadeConfirmada: CIDADE_PERMITIDA,
+          bairroConfirmado: inputBairroManual.value.trim(),
+          logradouroConfirmado: inputLogradouroManual.value.trim(),
+          modoLocalizacao: 'manual'
+        })
       });
 
-      if (resposta.ok) {
-        const resultado = await resposta.json();
-        alert(`✅ Sucesso! Problema registrado em ${resultado.bairro}.`);
-        
-        modal.classList.add('hidden');
-        formIncidente.reset();
-        
-        // Atualiza os números nos cards
-        if(typeof atualizarEstatisticas === 'function') atualizarEstatisticas();
-        
-        // Atualiza os pinos no mapa
-        if(typeof carregarMarcadoresNoMapa === 'function') {
-           carregarMarcadoresNoMapa(realMap); 
-        }
+      const resultado = await resposta.json().catch(() => ({}));
+
+      if (!resposta.ok) {
+        throw new Error(resultado.erro || 'Erro ao gravar o relato.');
       }
+
+      alert(`✅ Sucesso! Problema registrado em ${resultado.bairro || inputBairroManual.value.trim()}.`);
+      modal.classList.add('hidden');
+      formIncidente.reset();
+      configurarModoLocalizacao('gps');
+
+      if (typeof atualizarEstatisticas === 'function') atualizarEstatisticas();
     } catch (err) {
-      alert("❌ Erro de conexão. O backend está ligado?");
+      alert(`❌ ${err.message}`);
     } finally {
       btnSubmit.disabled = false;
       btnSubmit.innerText = textoOriginal;
     }
-  }, (erroGps) => {
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    try {
+      const dadosRelato = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        categoria: document.getElementById('input-categoria').value,
+        descricao: document.getElementById('input-descricao').value
+      };
+
+      btnSubmit.innerText = "🔎 Validando endereço...";
+      const endereco = await buscarEnderecoPorGps(dadosRelato.lat, dadosRelato.lng);
+      const cidadeNormalizada = normalizarTexto(endereco.cidade || endereco.enderecoCompleto);
+
+      if (!cidadeNormalizada.includes(normalizarTexto(CIDADE_PERMITIDA))) {
+        alert(`❌ Este sistema aceita relatos apenas em ${CIDADE_PERMITIDA}.`);
+        btnSubmit.disabled = false;
+        btnSubmit.innerText = textoOriginal;
+        return;
+      }
+
+      relatoPendente = {
+        ...dadosRelato,
+        enderecoConfirmado: endereco.enderecoCompleto
+      };
+
+      abrirConfirmacaoEndereco(endereco);
+      btnSubmit.innerText = "Aguardando confirmação...";
+    } catch (err) {
+      alert("❌ Não foi possível validar o endereço. Tente novamente.");
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = textoOriginal;
+    }
+  }, () => {
     alert("⚠️ Precisamos do GPS para validar o local do problema!");
     btnSubmit.disabled = false;
     btnSubmit.innerText = textoOriginal;
   });
 };
+
 
 
 /* =========================
@@ -550,7 +903,81 @@ async function carregarMarcadoresNoMapa(mapa) {
       MAPA REAL
 ========================== */
 const realMapEl = document.getElementById('real-map');
+const heatmapEl = document.getElementById('heatmap');
+const mapLockOverlay = document.getElementById('map-lock-overlay');
+const botoesMapa = document.querySelectorAll('.btn-abrir-mapa');
 let realMap;
+let mapTapTimer = null;
+let mapTapCount = 0;
+
+function mapaEmTelaMobile() {
+    return window.matchMedia('(max-width: 767px)').matches;
+}
+
+function bloquearMovimentoMapa() {
+    if (!realMap || !mapaEmTelaMobile()) return;
+
+    realMap.dragging.disable();
+    realMap.touchZoom.disable();
+    realMap.doubleClickZoom.disable();
+    realMap.scrollWheelZoom.disable();
+    realMap.boxZoom.disable();
+    realMap.keyboard.disable();
+
+    if (mapLockOverlay) mapLockOverlay.classList.remove('hidden');
+}
+
+function liberarMovimentoMapa() {
+    if (!realMap) return;
+
+    realMap.dragging.enable();
+    realMap.touchZoom.enable();
+    realMap.doubleClickZoom.enable();
+    realMap.scrollWheelZoom.enable();
+    realMap.boxZoom.enable();
+    realMap.keyboard.enable();
+
+    if (mapLockOverlay) mapLockOverlay.classList.add('hidden');
+}
+
+function ajustarInteracaoMapa() {
+    if (!realMap) return;
+
+    if (mapaEmTelaMobile()) {
+        bloquearMovimentoMapa();
+    } else {
+        liberarMovimentoMapa();
+    }
+}
+
+function abrirMapa() {
+    if (heatmapEl) {
+        heatmapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    liberarMovimentoMapa();
+
+    if (mobileMenu) {
+        mobileMenu.classList.add('hidden');
+        if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+}
+
+function tratarToqueDesbloqueioMapa() {
+    mapTapCount += 1;
+
+    if (mapTapCount >= 2) {
+        clearTimeout(mapTapTimer);
+        mapTapCount = 0;
+        liberarMovimentoMapa();
+        return;
+    }
+
+    clearTimeout(mapTapTimer);
+    mapTapTimer = setTimeout(() => {
+        mapTapCount = 0;
+    }, 450);
+}
 
 if (realMapEl && window.L) {
     realMap = L.map(realMapEl, {
@@ -570,6 +997,7 @@ if (realMapEl && window.L) {
     carregarMarcadoresNoMapa(realMap);
 
     setTimeout(() => realMap.invalidateSize(), 300);
+    ajustarInteracaoMapa();
 }
 
     /* =========================
@@ -594,14 +1022,31 @@ if (mobileMenuBtn && mobileMenu) {
 }
 
 //Lógica Ativar todos os botões "Reportar"
+botoesMapa.forEach(botao => {
+  botao.addEventListener('click', (e) => {
+    e.preventDefault();
+    abrirMapa();
+  });
+});
+
+if (mapLockOverlay) {
+  mapLockOverlay.addEventListener('click', tratarToqueDesbloqueioMapa);
+  mapLockOverlay.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    liberarMovimentoMapa();
+  });
+}
+
+window.addEventListener('resize', ajustarInteracaoMapa);
+
 const botoesReportar = document.querySelectorAll('#cta-btn, .btn-abrir-modal');
 
 botoesReportar.forEach(botao => {
   botao.onclick = (e) => {
     e.preventDefault(); // Impede o link de dar refresh na página
     
-    // Abre o modal de relato
-    if (modal) modal.classList.remove('hidden');
+    // Abre a escolha do tipo de localizacao antes do formulario
+    abrirEscolhaLocal();
     
     // Fecha o menu mobile automaticamente para o usuário ver o formulário
     if (mobileMenu) {
