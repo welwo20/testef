@@ -13,6 +13,7 @@
   ========================== -->
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <!-- Scripts /_sdk removidos: eles só existem no ambiente do editor original e causavam erro local/Vercel -->
@@ -250,8 +251,8 @@
         <!-- MENU LATERAL DIREITA -->
         <div class="hidden md:flex items-center gap-8 text-sm text-white">
           <a href="#heatmap" class="nav-link btn-abrir-mapa">Mapa</a>
-          <a href="#" class="nav-link">Reportar</a>
-          <a href="#" class="nav-link">Estatísticas</a>
+          <a href="#" class="nav-link btn-abrir-modal">Reportar</a>
+          <a href="#" class="nav-link btn-abrir-estatisticas">Estatísticas</a>
           <a href="#" class="nav-link">Sobre</a>
         </div>
 
@@ -276,7 +277,7 @@
     <div id="mobile-menu" class="hidden w-full px-6 py-4 flex flex-col gap-3 text-sm text-white md:hidden" style="background:#0B2A4A;">
       <a href="#heatmap" class="btn-abrir-mapa opacity-80 hover:opacity-100 py-2 border-b border-white/10">Mapa</a>
       <a href="#" class="btn-abrir-modal opacity-80 hover:opacity-100 py-2 border-b border-white/10">Reportar</a>
-      <a href="#" class="opacity-80 hover:opacity-100 py-2 border-b border-white/10">Estatísticas</a>
+      <a href="#" class="btn-abrir-estatisticas opacity-80 hover:opacity-100 py-2 border-b border-white/10">Estatísticas</a>
       <a href="#" class="opacity-80 hover:opacity-100 py-2">Sobre</a> 
     </div>
     
@@ -347,12 +348,14 @@
 
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Bairro</label>
-          <input id="input-bairro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Informe o bairro">
+          <input id="input-bairro-manual" list="sugestoes-bairro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Informe o bairro" autocomplete="off">
+          <datalist id="sugestoes-bairro-manual"></datalist>
         </div>
 
         <div>
           <label class="block text-sm font-semibold text-gray-700 mb-1">Logradouro</label>
-          <input id="input-logradouro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Rua, avenida ou ponto de referência">
+          <input id="input-logradouro-manual" list="sugestoes-logradouro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Rua, avenida ou ponto de referência" autocomplete="off">
+          <datalist id="sugestoes-logradouro-manual"></datalist>
         </div>
       </div>
 
@@ -503,6 +506,7 @@
           <!-- BOTÃO SECUNDÁRIO -->
           <button
             id="secondary-btn"
+            type="button"
             class="flex items-center gap-2 px-7 py-3.5 rounded-xl font-semibold text-sm transition-all border"
             style="border-color:rgba(0,0,0,0.2);color:#1f2937;background:transparent;">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="bar-chart-3" style="width:18px;height:18px;" class="lucide lucide-bar-chart-3">
@@ -541,6 +545,78 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- =========================
+       MODAL DE ESTATÍSTICAS
+  ========================== -->
+  <div id="modal-estatisticas" class="hidden fixed inset-0 bg-black/60 z-[99999] overflow-y-auto backdrop-blur-sm">
+    <button id="fechar-estatisticas" class="fixed top-5 right-5 z-[100000] bg-white rounded-full w-12 h-12 shadow-xl flex items-center justify-center text-3xl hover:scale-105 transition-all" type="button" aria-label="Fechar estatísticas">
+      &times;
+    </button>
+
+    <div class="min-h-screen px-4 py-8 md:px-10">
+      <div class="max-w-6xl mx-auto">
+        <section class="bg-white rounded-xl shadow-xl p-6 md:p-10 mb-8">
+          <h2 class="text-center text-2xl font-extrabold text-[#0B2A4A] mb-8">
+            Reportagens por bairros
+          </h2>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
+            <div class="relative max-w-md mx-auto w-full">
+              <canvas id="grafico-donut-bairros" aria-label="Gráfico de reportagens por bairro"></canvas>
+
+              <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span class="text-sm font-bold text-[#0B2A4A]">TOTAL</span>
+                <span id="donut-total" class="text-4xl font-extrabold text-[#0B2A4A]">0</span>
+                <span class="text-sm font-bold text-[#0B2A4A]">REPORTAGENS</span>
+              </div>
+            </div>
+
+            <div>
+              <div id="legenda-bairros" class="space-y-4 mb-8"></div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div class="text-center">
+                  <div class="h-1 bg-[#0B2A4A] mb-3"></div>
+                  <p class="text-sm font-bold text-[#0B2A4A]">TOTAL REPORTADO</p>
+                  <p id="total-reportado" class="text-4xl font-extrabold text-blue-700 mt-3">0</p>
+                  <div class="h-1 bg-[#0B2A4A] mt-3"></div>
+                </div>
+
+                <div class="text-center">
+                  <div class="h-1 bg-[#0B2A4A] mb-3"></div>
+                  <p class="text-sm font-bold text-[#0B2A4A]">TOTAL RESOLVIDO</p>
+                  <p id="total-resolvido" class="text-4xl font-extrabold text-emerald-600 mt-3">0</p>
+                  <div class="h-1 bg-[#0B2A4A] mt-3"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-xl p-6 md:p-10">
+          <h2 class="text-center text-2xl font-extrabold text-[#0B2A4A] mb-8">
+            Resolvidos recentemente
+          </h2>
+
+          <div class="overflow-x-auto">
+            <table class="w-full border-collapse min-w-[700px]">
+              <thead>
+                <tr class="text-[#0B2A4A] border-b">
+                  <th class="p-4 text-left">BAIRRO</th>
+                  <th class="p-4 text-left">LOGRADOURO</th>
+                  <th class="p-4 text-left">PROBLEMA</th>
+                  <th class="p-4 text-center">STATUS</th>
+                </tr>
+              </thead>
+
+              <tbody id="tabela-resolvidos"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -593,8 +669,12 @@ const inputDescricao = document.getElementById('input-descricao');
 const inputCidadeManual = document.getElementById('input-cidade-manual');
 const inputBairroManual = document.getElementById('input-bairro-manual');
 const inputLogradouroManual = document.getElementById('input-logradouro-manual');
+const sugestoesBairroManual = document.getElementById('sugestoes-bairro-manual');
+const sugestoesLogradouroManual = document.getElementById('sugestoes-logradouro-manual');
 const avisoLocalizacao = document.querySelector('#modal-reportar [data-lucide="map-pin"]')?.nextElementSibling;
 let modoLocalizacao = 'gps';
+let timerSugestaoBairro = null;
+let timerSugestaoLogradouro = null;
 
 // Controle do Modal
 function abrirEscolhaLocal() {
@@ -610,6 +690,7 @@ function configurarModoLocalizacao(modo) {
   if (inputBairroManual) inputBairroManual.required = modoManual;
   if (inputLogradouroManual) inputLogradouroManual.required = modoManual;
   if (camposLocalManual) camposLocalManual.classList.toggle('hidden', !modoManual);
+  if (!modoManual) limparSugestoesEnderecoManual();
   if (avisoLocalizacao) {
     avisoLocalizacao.innerText = modoManual
       ? 'LOCALIZAÇÃO MANUAL: INFORME BAIRRO E LOGRADOURO ABAIXO'
@@ -663,6 +744,105 @@ function normalizarTexto(texto) {
     .toUpperCase();
 }
 
+function limparSugestoesEnderecoManual() {
+  if (sugestoesBairroManual) sugestoesBairroManual.innerHTML = '';
+  if (sugestoesLogradouroManual) sugestoesLogradouroManual.innerHTML = '';
+}
+
+function preencherDatalist(datalist, valores) {
+  if (!datalist) return;
+
+  const valoresUnicos = [...new Set(valores.filter(Boolean))].slice(0, 6);
+  datalist.innerHTML = valoresUnicos
+    .map(valor => `<option value="${escaparHtml(valor)}"></option>`)
+    .join('');
+}
+
+function debounceSugestao(callback, timerAtual) {
+  clearTimeout(timerAtual);
+  return setTimeout(callback, 450);
+}
+
+function primeiroTrechoEndereco(item) {
+  return String(item?.display_name || '').split(',')[0]?.trim() || '';
+}
+
+async function buscarSugestoesNominatim(consulta) {
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&addressdetails=1&countrycodes=br&q=${encodeURIComponent(consulta)}`;
+  const resposta = await fetch(url, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!resposta.ok) return [];
+
+  const resultados = await resposta.json();
+  return resultados.filter(item => {
+    const address = item.address || {};
+    const cidade = normalizarTexto(`${address.city || ''} ${address.town || ''} ${address.municipality || ''} ${address.county || ''} ${item.display_name || ''}`);
+    return cidade.includes(normalizarTexto(CIDADE_PERMITIDA));
+  });
+}
+
+async function carregarSugestoesBairro() {
+  const termo = inputBairroManual?.value.trim() || '';
+
+  if (termo.length < 2) {
+    preencherDatalist(sugestoesBairroManual, []);
+    return;
+  }
+
+  try {
+    const resultados = await buscarSugestoesNominatim(`${termo}, ${CIDADE_PERMITIDA}, RJ, Brasil`);
+    const bairros = resultados.map(item => {
+      const address = item.address || {};
+      return address.suburb || address.neighbourhood || address.city_district || address.quarter || primeiroTrechoEndereco(item);
+    });
+
+    preencherDatalist(sugestoesBairroManual, bairros);
+  } catch (error) {
+    console.warn('Não foi possível carregar sugestões de bairro:', error);
+  }
+}
+
+async function carregarSugestoesLogradouro() {
+  const termo = inputLogradouroManual?.value.trim() || '';
+  const bairro = inputBairroManual?.value.trim() || '';
+
+  if (termo.length < 3) {
+    preencherDatalist(sugestoesLogradouroManual, []);
+    return;
+  }
+
+  try {
+    const localidade = bairro
+      ? `${bairro}, ${CIDADE_PERMITIDA}, RJ, Brasil`
+      : `${CIDADE_PERMITIDA}, RJ, Brasil`;
+    const resultados = await buscarSugestoesNominatim(`${termo}, ${localidade}`);
+    const logradouros = resultados.map(item => {
+      const address = item.address || {};
+      return address.road || address.pedestrian || address.footway || address.cycleway || primeiroTrechoEndereco(item);
+    });
+
+    preencherDatalist(sugestoesLogradouroManual, logradouros);
+  } catch (error) {
+    console.warn('Não foi possível carregar sugestões de logradouro:', error);
+  }
+}
+
+inputBairroManual?.addEventListener('input', () => {
+  timerSugestaoBairro = debounceSugestao(carregarSugestoesBairro, timerSugestaoBairro);
+
+  if (inputLogradouroManual?.value.trim().length >= 3) {
+    timerSugestaoLogradouro = debounceSugestao(carregarSugestoesLogradouro, timerSugestaoLogradouro);
+  }
+});
+
+inputLogradouroManual?.addEventListener('input', () => {
+  timerSugestaoLogradouro = debounceSugestao(carregarSugestoesLogradouro, timerSugestaoLogradouro);
+});
+
 async function buscarEnderecoPorGps(lat, lng) {
   const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
   const resposta = await fetch(url, {
@@ -708,6 +888,32 @@ async function buscarEnderecoPorGps(lat, lng) {
   };
 }
 
+async function buscarCoordenadasPorEnderecoManual(logradouro, bairro) {
+  const consulta = `${logradouro}, ${bairro}, ${CIDADE_PERMITIDA}, RJ, Brasil`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=1&q=${encodeURIComponent(consulta)}`;
+  const resposta = await fetch(url, {
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!resposta.ok) {
+    throw new Error('Não foi possível validar o endereço informado.');
+  }
+
+  const resultados = await resposta.json();
+  const primeiroResultado = resultados[0];
+
+  if (!primeiroResultado) {
+    throw new Error('Endereço não encontrado em Itaperuna.');
+  }
+
+  return {
+    lat: parseFloat(primeiroResultado.lat),
+    lng: parseFloat(primeiroResultado.lon)
+  };
+}
+
 function abrirConfirmacaoEndereco(endereco) {
   document.getElementById('confirm-cidade').value = endereco.cidade || CIDADE_PERMITIDA;
   document.getElementById('confirm-bairro').value = endereco.bairro || '';
@@ -726,8 +932,10 @@ async function enviarRelatoConfirmado() {
     btnConfirmarEndereco.disabled = true;
     btnConfirmarEndereco.innerText = '🚀 Enviando...';
 
-    relatoPendente.bairroConfirmado = document.getElementById('confirm-bairro').value;
-    relatoPendente.logradouroConfirmado = document.getElementById('confirm-logradouro').value;
+    relatoPendente.bairroConfirmado = document.getElementById('confirm-bairro').value.trim();
+    relatoPendente.bairro = relatoPendente.bairroConfirmado;
+    relatoPendente.logradouro = document.getElementById('confirm-logradouro').value.trim();
+    relatoPendente.rua = relatoPendente.logradouro;
     relatoPendente.cidadeConfirmada = CIDADE_PERMITIDA;
 
     const resposta = await fetch(`${API_URL}/api/incidentes`, {
@@ -795,17 +1003,27 @@ formIncidente.onsubmit = async (e) => {
 
   if (modoLocalizacao === 'manual') {
     try {
+      btnSubmit.innerText = "Validando endereço...";
+
+      const bairroManual = inputBairroManual.value.trim();
+      const logradouroManual = inputLogradouroManual.value.trim();
+      const coordenadasManual = await buscarCoordenadasPorEnderecoManual(logradouroManual, bairroManual);
+
       btnSubmit.innerText = "Enviando...";
 
       const resposta = await fetch(`${API_URL}/api/incidentes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          lat: coordenadasManual.lat,
+          lng: coordenadasManual.lng,
           categoria: inputCategoria.value,
           descricao: inputDescricao.value,
           cidadeConfirmada: CIDADE_PERMITIDA,
-          bairroConfirmado: inputBairroManual.value.trim(),
-          logradouroConfirmado: inputLogradouroManual.value.trim(),
+          bairroConfirmado: bairroManual,
+          bairro: bairroManual,
+          logradouro: logradouroManual,
+          rua: logradouroManual,
           modoLocalizacao: 'manual'
         })
       });
@@ -816,12 +1034,16 @@ formIncidente.onsubmit = async (e) => {
         throw new Error(resultado.erro || 'Erro ao gravar o relato.');
       }
 
-      alert(`✅ Sucesso! Problema registrado em ${resultado.bairro || inputBairroManual.value.trim()}.`);
+      alert(`✅ Sucesso! Problema registrado em ${resultado.bairro || bairroManual}.`);
       modal.classList.add('hidden');
       formIncidente.reset();
       configurarModoLocalizacao('gps');
 
       if (typeof atualizarEstatisticas === 'function') atualizarEstatisticas();
+
+      if (typeof carregarMarcadoresNoMapa === 'function') {
+        carregarMarcadoresNoMapa(realMap);
+      }
     } catch (err) {
       alert(`❌ ${err.message}`);
     } finally {
@@ -875,23 +1097,34 @@ formIncidente.onsubmit = async (e) => {
 /* =========================
    MARCADORES REAIS NO MAPA
 ========================== */
+let camadaMarcadoresMapa = null;
+
 async function carregarMarcadoresNoMapa(mapa) {
+  if (!mapa) return;
+
   try {
     const res = await fetch(`${API_URL}/api/pontos-mapa`);
     if (!res.ok) throw new Error('Erro ao buscar pontos do mapa');
     const pontos = await res.json();
+
+    if (camadaMarcadoresMapa) {
+      camadaMarcadoresMapa.clearLayers();
+    } else {
+      camadaMarcadoresMapa = L.layerGroup().addTo(mapa);
+    }
   
     pontos.forEach(p => {
+      if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return;
 
-    L.circleMarker([p.lat, p.lng], {
-      radius: 10,
-      fillColor: p.status.toLowerCase() === 'resolvido' ? "#10b981" : "#ef4444",
-      color: "#fff",
-      weight: 2,
-      fillOpacity: 0.8
-    })
-    .addTo(mapa)
-    .bindPopup(`<b>${p.categoria}</b><br>Status: ${p.status}`);
+      L.circleMarker([p.lat, p.lng], {
+        radius: 10,
+        fillColor: String(p.status).toLowerCase() === 'resolvido' ? "#10b981" : "#ef4444",
+        color: "#fff",
+        weight: 2,
+        fillOpacity: 0.8
+      })
+      .addTo(camadaMarcadoresMapa)
+      .bindPopup(`<b>${p.categoria || 'Ocorrência'}</b><br>${p.rua || ''} ${p.bairro ? '- ' + p.bairro : ''}<br>Status: ${p.status || 'Pendente'}<br>Apoios: ${p.apoios || 1}`);
     });
   } catch (error) {
     console.error('❌ Não foi possível carregar os pontos do mapa:', error);
@@ -1057,6 +1290,207 @@ botoesReportar.forEach(botao => {
     console.log("?? Formulário de reporte aberto com sucesso!");
   };
 });
+
+/* =========================
+   MODAL DE ESTATÍSTICAS
+========================== */
+let graficoDonut = null;
+
+function escaparHtml(valor) {
+  return String(valor || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function abrirEstatisticas() {
+  const modalEstatisticas = document.getElementById('modal-estatisticas');
+  if (!modalEstatisticas) return;
+
+  modalEstatisticas.classList.remove('hidden');
+  carregarEstatisticasTempoReal();
+}
+
+function fecharEstatisticas() {
+  const modalEstatisticas = document.getElementById('modal-estatisticas');
+  if (modalEstatisticas) modalEstatisticas.classList.add('hidden');
+}
+
+document.getElementById('fechar-estatisticas')?.addEventListener('click', fecharEstatisticas);
+
+document.getElementById('modal-estatisticas')?.addEventListener('click', (event) => {
+  if (event.target.id === 'modal-estatisticas') fecharEstatisticas();
+});
+
+document.querySelectorAll('#secondary-btn, .btn-abrir-estatisticas').forEach(botao => {
+  botao.addEventListener('click', (event) => {
+    event.preventDefault();
+    abrirEstatisticas();
+
+    if (mobileMenu) {
+      mobileMenu.classList.add('hidden');
+      if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+});
+
+async function carregarEstatisticasTempoReal() {
+  try {
+    const [statsRes, pontosRes] = await Promise.all([
+      fetch(`${API_URL}/api/estatisticas`),
+      fetch(`${API_URL}/api/pontos-mapa`)
+    ]);
+
+    if (!statsRes.ok || !pontosRes.ok) {
+      throw new Error('Erro ao carregar estatísticas.');
+    }
+
+    const stats = await statsRes.json();
+    const incidentes = await pontosRes.json();
+
+    const totalReportado = Number(stats.total || incidentes.length || 0);
+    const totalResolvido = Number(stats.resolvidos || 0);
+
+    document.getElementById('total-reportado').textContent = totalReportado;
+    document.getElementById('total-resolvido').textContent = totalResolvido;
+    document.getElementById('donut-total').textContent = totalReportado;
+
+    const bairros = {};
+
+    incidentes.forEach(item => {
+      const bairro = item.bairro || 'Centro';
+      bairros[bairro] = (bairros[bairro] || 0) + 1;
+    });
+
+    const bairrosOrdenados = Object.entries(bairros)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 4);
+
+    montarGraficoDonut(bairrosOrdenados, totalReportado);
+    montarTabelaResolvidos(incidentes);
+  } catch (error) {
+    console.error('Erro ao carregar estatísticas:', error);
+  }
+}
+
+function montarGraficoDonut(bairrosOrdenados, totalReportado) {
+  const canvas = document.getElementById('grafico-donut-bairros');
+  if (!canvas || !window.Chart) return;
+
+  const labels = bairrosOrdenados.map(item => item[0]);
+  const valores = bairrosOrdenados.map(item => item[1]);
+  const cores = ['#3B82F6', '#10B981', '#FBBF24', '#8B5CF6'];
+
+  if (graficoDonut) {
+    graficoDonut.destroy();
+  }
+
+  graficoDonut = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: valores,
+        backgroundColor: cores,
+        borderColor: '#ffffff',
+        borderWidth: 3,
+        hoverOffset: 8
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '45%',
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const valor = context.raw;
+              const porcentagem = totalReportado > 0
+                ? Math.round((valor / totalReportado) * 100)
+                : 0;
+
+              return `${context.label}: ${valor} (${porcentagem}%)`;
+            }
+          }
+        }
+      },
+      animation: {
+        animateRotate: true,
+        animateScale: true
+      }
+    }
+  });
+
+  montarLegendaBairros(bairrosOrdenados, totalReportado, cores);
+}
+
+function montarLegendaBairros(bairrosOrdenados, totalReportado, cores) {
+  const legenda = document.getElementById('legenda-bairros');
+  if (!legenda) return;
+
+  if (!bairrosOrdenados.length) {
+    legenda.innerHTML = '<p class="text-center text-gray-500">Nenhum bairro com relatos ainda.</p>';
+    return;
+  }
+
+  legenda.innerHTML = bairrosOrdenados.map(([bairro, total], index) => {
+    const porcentagem = totalReportado > 0
+      ? Math.round((total / totalReportado) * 100)
+      : 0;
+
+    return `
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <span class="w-4 h-4 rounded-full" style="background:${cores[index]}"></span>
+          <span class="font-semibold text-[#0B2A4A]">${escaparHtml(bairro)}</span>
+        </div>
+
+        <div class="flex items-center gap-5">
+          <span class="font-extrabold text-xl text-[#0B2A4A]">${total}</span>
+          <span class="text-sm text-[#0B2A4A]">(${porcentagem}%)</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function montarTabelaResolvidos(incidentes) {
+  const tabela = document.getElementById('tabela-resolvidos');
+  if (!tabela) return;
+
+  const resolvidos = incidentes
+    .filter(item => String(item.status || '').toLowerCase() === 'resolvido')
+    .slice(0, 10);
+
+  if (!resolvidos.length) {
+    tabela.innerHTML = `
+      <tr>
+        <td colspan="4" class="p-6 text-center text-gray-500">
+          Nenhum problema resolvido recentemente.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tabela.innerHTML = resolvidos.map(item => `
+    <tr class="border-b hover:bg-gray-50 transition-all">
+      <td class="p-4 font-semibold text-[#0B2A4A]">${escaparHtml(item.bairro || '-')}</td>
+      <td class="p-4 text-[#0B2A4A]">${escaparHtml(item.rua || '-')}</td>
+      <td class="p-4 text-[#0B2A4A]">${escaparHtml(item.categoria || '-')}</td>
+      <td class="p-4 text-center">
+        <span class="inline-flex items-center justify-center w-9 h-9 rounded-full border-4 border-emerald-500 text-emerald-500 font-bold text-xl">
+          ✓
+        </span>
+      </td>
+    </tr>
+  `).join('');
+}
 
     /* =========================
        CONFIGURAÇÃO PADRÃO
