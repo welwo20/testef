@@ -1,6 +1,7 @@
-const ITAPERUNA = [-21.1986, -41.8904];
+const PORCIUNCULA = [-20.9636, -42.0428];
 const API_URL = "https://backend-render-a8ee.onrender.com";
-const CIDADE_PERMITIDA = "ITAPERUNA";
+const CIDADE_PERMITIDA = "Porciuncula";
+const CIDADE_PERMITIDA_NORMALIZADA = "PORCIUNCULA";
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -15,13 +16,26 @@ let markers = null;
 let heatLayer = null;
 
 if (mapEl && window.L) {
-  map = L.map("map", { zoomControl: true }).setView(ITAPERUNA, 14);
+  map = L.map("map", { zoomControl: true }).setView(PORCIUNCULA, 14);
+  const limitesPorciuncula = L.latLngBounds(
+    [-21.08, -42.15],
+    [-20.86, -41.92]
+  );
+  map.setMaxBounds(limitesPorciuncula);
   markers = L.layerGroup().addTo(map);
 
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
     attribution: "&copy; OpenStreetMap"
   }).addTo(map);
+}
+
+function normalizarTexto(texto) {
+  return String(texto || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase()
+    .trim();
 }
 
 function setMessage(text, type = "info") {
@@ -143,12 +157,33 @@ async function buscarCoordenadasPorEnderecoManual(logradouro, bairro) {
   const result = results[0];
 
   if (!result) {
-    throw new Error("Endereco nao encontrado em Itaperuna.");
+    throw new Error("Endereco nao encontrado em Porciuncula.");
   }
 
   return {
     lat: parseFloat(result.lat),
     lng: parseFloat(result.lon)
+  };
+}
+
+async function confirmarEndereco(lat, lng) {
+  const response = await fetch(`${API_URL}/api/confirmar-endereco`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Accept": "application/json" },
+    body: JSON.stringify({ lat, lng })
+  });
+
+  const result = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(result.erro || "Nao foi possivel validar o endereco.");
+  }
+
+  const cidadeNormalizada = normalizarTexto(`${result.cidade || ""} ${result.endereco || ""}`);
+
+  return {
+    ...result,
+    permitido: Boolean(result.permitido) || cidadeNormalizada.includes(CIDADE_PERMITIDA_NORMALIZADA)
   };
 }
 
@@ -177,6 +212,18 @@ async function submitReport(event) {
     return;
   }
 
+  try {
+    const endereco = await confirmarEndereco(lat, lng);
+
+    if (!endereco.permitido) {
+      setMessage("Relatos permitidos apenas em Porciuncula-RJ.", "error");
+      return;
+    }
+  } catch (error) {
+    setMessage(error.message, "error");
+    return;
+  }
+
   const payload = {
     lat,
     lng,
@@ -185,7 +232,8 @@ async function submitReport(event) {
     rua,
     logradouro: rua,
     bairro,
-    bairroConfirmado: bairro
+    bairroConfirmado: bairro,
+    cidadeConfirmada: CIDADE_PERMITIDA
   };
 
   const response = await fetch(`${API_URL}/api/incidentes`, {
@@ -221,7 +269,7 @@ function requestLocation() {
       openModal();
     },
     () => {
-      setLocation(...ITAPERUNA);
+      setLocation(...PORCIUNCULA);
       openModal();
     },
     { enableHighAccuracy: true, timeout: 8000 }
@@ -234,7 +282,7 @@ const locateBtn = $("#locate-btn");
 
 if (openReportBtn) {
   openReportBtn.addEventListener("click", () => {
-    setLocation(...ITAPERUNA);
+    setLocation(...PORCIUNCULA);
     openModal();
   });
 }

@@ -435,7 +435,7 @@
             id="hero-subtitle"
             class="text-base md:text-lg max-w-xl mx-auto"
             style="color:#6b7280;">
-            Reporte problemas nas ruas da sua cidade e ajude a prefeitura a melhorar o seu bairro.
+            Reporte problemas urbanos em Porciúncula-RJ e acompanhe as soluções da prefeitura.
           </p>
         </div>
 
@@ -447,7 +447,7 @@
           class="fade-up fade-up-d2 map-container w-full mx-auto"
           style="max-width:900px; height:420px; background:#f3f4f6; border:1px solid rgba(0,0,0,0.1);"
         >
-          <div id="real-map" aria-label="Mapa real de Itaperuna"></div>
+          <div id="real-map" aria-label="Mapa real de Porciúncula"></div>
           <button id="map-lock-overlay" class="map-lock-overlay" type="button" aria-label="Desbloquear movimentação do mapa">
             <span>Dê 2 toques para mover o mapa</span>
           </button>
@@ -686,7 +686,7 @@ function configurarModoLocalizacao(modo) {
   modoLocalizacao = modo;
   const modoManual = modo === 'manual';
 
-  if (inputCidadeManual) inputCidadeManual.value = CIDADE_PERMITIDA;
+  if (inputCidadeManual) inputCidadeManual.value = CIDADE_MANUAL_LABEL;
   if (inputBairroManual) inputBairroManual.required = modoManual;
   if (inputLogradouroManual) inputLogradouroManual.required = modoManual;
   if (camposLocalManual) camposLocalManual.classList.toggle('hidden', !modoManual);
@@ -729,7 +729,10 @@ inputCategoria.addEventListener('change', atualizarObrigatoriedadeDescricao);
 
 // Cidade permitida para registrar relatos.
 
-const CIDADE_PERMITIDA = "ITAPERUNA";
+const PORCIUNCULA = [-20.9636, -42.0428];
+const CIDADE_PERMITIDA = "Porciúncula";
+const CIDADE_PERMITIDA_NORMALIZADA = "PORCIUNCULA";
+const CIDADE_MANUAL_LABEL = "Porciúncula - RJ";
 
 const modalConfirmarEndereco = document.getElementById('modal-confirmar-endereco');
 const btnConfirmarEndereco = document.getElementById('btn-confirmar-endereco');
@@ -780,8 +783,8 @@ async function buscarSugestoesNominatim(consulta) {
   const resultados = await resposta.json();
   return resultados.filter(item => {
     const address = item.address || {};
-    const cidade = normalizarTexto(`${address.city || ''} ${address.town || ''} ${address.municipality || ''} ${address.county || ''} ${item.display_name || ''}`);
-    return cidade.includes(normalizarTexto(CIDADE_PERMITIDA));
+    const cidade = normalizarTexto(`${address.city || ''} ${address.town || ''} ${address.village || ''} ${address.municipality || ''} ${address.county || ''} ${item.display_name || ''}`);
+    return cidade.includes(CIDADE_PERMITIDA_NORMALIZADA);
   });
 }
 
@@ -844,47 +847,30 @@ inputLogradouroManual?.addEventListener('input', () => {
 });
 
 async function buscarEnderecoPorGps(lat, lng) {
-  const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`;
+  const url = `${API_URL}/api/confirmar-endereco`;
   const resposta = await fetch(url, {
+    method: 'POST',
     headers: {
-      'Accept': 'application/json'
-    }
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ lat, lng })
   });
 
+  const dados = await resposta.json().catch(() => ({}));
+
   if (!resposta.ok) {
-    throw new Error('Não foi possível validar o endereço.');
+    throw new Error(dados.erro || 'Não foi possível validar o endereço.');
   }
 
-  const dados = await resposta.json();
-  const address = dados.address || {};
-
-  const cidade =
-    address.city ||
-    address.town ||
-    address.village ||
-    address.municipality ||
-    address.county ||
-    '';
-
-  const bairro =
-    address.suburb ||
-    address.neighbourhood ||
-    address.city_district ||
-    address.quarter ||
-    'Centro/Geral';
-
-  const logradouro =
-    address.road ||
-    address.pedestrian ||
-    address.footway ||
-    address.cycleway ||
-    'Logradouro não identificado';
+  const cidadeNormalizada = normalizarTexto(`${dados.cidade || ''} ${dados.endereco || ''}`);
 
   return {
-    cidade,
-    bairro,
-    logradouro,
-    enderecoCompleto: dados.display_name || ''
+    cidade: dados.cidade || '',
+    bairro: dados.bairro || 'Centro/Geral',
+    logradouro: dados.logradouro || 'Logradouro não identificado',
+    enderecoCompleto: dados.endereco || '',
+    permitido: Boolean(dados.permitido) || cidadeNormalizada.includes(CIDADE_PERMITIDA_NORMALIZADA)
   };
 }
 
@@ -905,7 +891,7 @@ async function buscarCoordenadasPorEnderecoManual(logradouro, bairro) {
   const primeiroResultado = resultados[0];
 
   if (!primeiroResultado) {
-    throw new Error('Endereço não encontrado em Itaperuna.');
+    throw new Error('Endereço não encontrado em Porciúncula.');
   }
 
   return {
@@ -915,7 +901,7 @@ async function buscarCoordenadasPorEnderecoManual(logradouro, bairro) {
 }
 
 function abrirConfirmacaoEndereco(endereco) {
-  document.getElementById('confirm-cidade').value = endereco.cidade || CIDADE_PERMITIDA;
+  document.getElementById('confirm-cidade').value = CIDADE_MANUAL_LABEL;
   document.getElementById('confirm-bairro').value = endereco.bairro || '';
   document.getElementById('confirm-logradouro').value = endereco.logradouro || '';
   modalConfirmarEndereco.classList.remove('hidden');
@@ -1064,10 +1050,9 @@ formIncidente.onsubmit = async (e) => {
 
       btnSubmit.innerText = "🔎 Validando endereço...";
       const endereco = await buscarEnderecoPorGps(dadosRelato.lat, dadosRelato.lng);
-      const cidadeNormalizada = normalizarTexto(endereco.cidade || endereco.enderecoCompleto);
 
-      if (!cidadeNormalizada.includes(normalizarTexto(CIDADE_PERMITIDA))) {
-        alert(`❌ Este sistema aceita relatos apenas em ${CIDADE_PERMITIDA}.`);
+      if (!endereco.permitido) {
+        alert('❌ Este sistema aceita relatos apenas em Porciúncula-RJ.');
         btnSubmit.disabled = false;
         btnSubmit.innerText = textoOriginal;
         return;
@@ -1081,7 +1066,7 @@ formIncidente.onsubmit = async (e) => {
       abrirConfirmacaoEndereco(endereco);
       btnSubmit.innerText = "Aguardando confirmação...";
     } catch (err) {
-      alert("❌ Não foi possível validar o endereço. Tente novamente.");
+      alert(`❌ ${err.message || 'Não foi possível validar o endereço. Tente novamente.'}`);
       btnSubmit.disabled = false;
       btnSubmit.innerText = textoOriginal;
     }
@@ -1216,7 +1201,13 @@ if (realMapEl && window.L) {
     realMap = L.map(realMapEl, {
         zoomControl: true,
         attributionControl: false
-    }).setView([-21.1986, -41.8904], 14);
+    }).setView(PORCIUNCULA, 14);
+
+    const limitesPorciuncula = L.latLngBounds(
+        [-21.08, -42.15],
+        [-20.86, -41.92]
+    );
+    realMap.setMaxBounds(limitesPorciuncula);
 
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         attribution: '&copy; OpenStreetMap &copy; CARTO',
@@ -1504,7 +1495,7 @@ function montarTabelaResolvidos(incidentes) {
       font_family: 'Gliker',
       font_size: 16,
       site_title: 'Voz Urbana',
-      site_subtitle: 'Reporte problemas nas ruas da sua cidade e ajude a prefeitura a melhorar o seu bairro.',
+      site_subtitle: 'Reporte problemas urbanos em Porciúncula-RJ e acompanhe as soluções da prefeitura.',
       cta_text: 'Reportar Problema',
       stat_1_value: '1.247',
       stat_1_label: 'Problemas Reportados',
