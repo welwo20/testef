@@ -356,6 +356,7 @@
           <label class="block text-sm font-semibold text-gray-700 mb-1">Logradouro</label>
           <input id="input-logradouro-manual" list="sugestoes-logradouro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all" placeholder="Rua, avenida ou ponto de referência" autocomplete="off">
           <datalist id="sugestoes-logradouro-manual"></datalist>
+          <div id="logradouros-disponiveis-manual" class="hidden mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"></div>
         </div>
       </div>
 
@@ -396,12 +397,13 @@
 
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">Bairro</label>
-        <input id="confirm-bairro" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
+        <input id="confirm-bairro" list="sugestoes-bairro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
       </div>
 
       <div>
         <label class="block text-sm font-semibold text-gray-700 mb-1">Logradouro</label>
-        <input id="confirm-logradouro" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
+        <input id="confirm-logradouro" list="sugestoes-logradouro-manual" class="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#365b6d] transition-all">
+        <div id="logradouros-disponiveis-confirmacao" class="hidden mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800"></div>
       </div>
 
       <button id="btn-confirmar-endereco" type="button" class="w-full bg-[#365b6d] text-white font-bold py-4 rounded-xl hover:bg-[#284655] transition-all shadow-lg">
@@ -671,6 +673,8 @@ const inputBairroManual = document.getElementById('input-bairro-manual');
 const inputLogradouroManual = document.getElementById('input-logradouro-manual');
 const sugestoesBairroManual = document.getElementById('sugestoes-bairro-manual');
 const sugestoesLogradouroManual = document.getElementById('sugestoes-logradouro-manual');
+const listaLogradourosManual = document.getElementById('logradouros-disponiveis-manual');
+const listaLogradourosConfirmacao = document.getElementById('logradouros-disponiveis-confirmacao');
 const avisoLocalizacao = document.querySelector('#modal-reportar [data-lucide="map-pin"]')?.nextElementSibling;
 let modoLocalizacao = 'gps';
 let timerSugestaoBairro = null;
@@ -733,10 +737,34 @@ const PORCIUNCULA = [-20.9636, -42.0428];
 const CIDADE_PERMITIDA = "Porciúncula";
 const CIDADE_PERMITIDA_NORMALIZADA = "PORCIUNCULA";
 const CIDADE_MANUAL_LABEL = "Porciúncula - RJ";
+const ENDERECOS_PORCIUNCULA = [
+  {
+    bairro: 'Centro',
+    logradouros: ['Rua Prefeito Synval Augusto Ferreira da Silva']
+  },
+  {
+    bairro: 'Purilândia',
+    logradouros: ['Rua Geraldino Silva']
+  },
+  {
+    bairro: 'Santa Clara',
+    logradouros: ['Rua João Antônio da Costa']
+  },
+  {
+    bairro: 'Centro / Geral',
+    logradouros: [
+      'Rua Prefeito Synval Augusto Ferreira da Silva',
+      'Rua Geraldino Silva',
+      'Rua João Antônio da Costa'
+    ]
+  }
+];
 
 const modalConfirmarEndereco = document.getElementById('modal-confirmar-endereco');
 const btnConfirmarEndereco = document.getElementById('btn-confirmar-endereco');
 const btnCancelarEndereco = document.getElementById('btn-cancelar-endereco');
+const inputConfirmBairro = document.getElementById('confirm-bairro');
+const inputConfirmLogradouro = document.getElementById('confirm-logradouro');
 let relatoPendente = null;
 
 function normalizarTexto(texto) {
@@ -748,17 +776,91 @@ function normalizarTexto(texto) {
 }
 
 function limparSugestoesEnderecoManual() {
-  if (sugestoesBairroManual) sugestoesBairroManual.innerHTML = '';
-  if (sugestoesLogradouroManual) sugestoesLogradouroManual.innerHTML = '';
+  preencherSugestoesLocais();
+  esconderListaLogradourosDisponiveis(listaLogradourosManual);
+  esconderListaLogradourosDisponiveis(listaLogradourosConfirmacao);
 }
 
 function preencherDatalist(datalist, valores) {
   if (!datalist) return;
 
-  const valoresUnicos = [...new Set(valores.filter(Boolean))].slice(0, 6);
+  const valoresUnicos = [...new Set(valores.filter(Boolean))].slice(0, 12);
   datalist.innerHTML = valoresUnicos
     .map(valor => `<option value="${escaparHtml(valor)}"></option>`)
     .join('');
+}
+
+function nomesBairrosPorciuncula() {
+  return ENDERECOS_PORCIUNCULA.map(item => item.bairro);
+}
+
+function todosLogradourosPorciuncula() {
+  return [...new Set(ENDERECOS_PORCIUNCULA.flatMap(item => item.logradouros))];
+}
+
+function encontrarBairroCadastrado(valor) {
+  const normalizado = normalizarTexto(valor);
+  return ENDERECOS_PORCIUNCULA.find(item => normalizarTexto(item.bairro) === normalizado) || null;
+}
+
+function logradourosDoBairro(valorBairro) {
+  const bairro = encontrarBairroCadastrado(valorBairro);
+  return bairro ? bairro.logradouros : todosLogradourosPorciuncula();
+}
+
+function filtrarPorTermo(valores, termo) {
+  const termoNormalizado = normalizarTexto(termo);
+  if (!termoNormalizado) return valores;
+  return valores.filter(valor => normalizarTexto(valor).includes(termoNormalizado));
+}
+
+function preencherSugestoesLocais() {
+  preencherDatalist(sugestoesBairroManual, nomesBairrosPorciuncula());
+  preencherDatalist(sugestoesLogradouroManual, todosLogradourosPorciuncula());
+}
+
+function esconderListaLogradourosDisponiveis(container) {
+  if (!container) return;
+  container.classList.add('hidden');
+  container.innerHTML = '';
+}
+
+function mostrarLogradourosDisponiveis(container, bairro, logradouros) {
+  if (!container) return;
+
+  if (!logradouros.length) {
+    container.classList.remove('hidden');
+    container.innerHTML = 'Nenhum logradouro cadastrado para este bairro.';
+    return;
+  }
+
+  const tituloBairro = bairro || 'o bairro informado';
+  container.classList.remove('hidden');
+  container.innerHTML = `
+    <p class="font-bold">Logradouros disponíveis para ${escaparHtml(tituloBairro)}:</p>
+    <ul class="mt-1 list-disc pl-4">${logradouros.map(item => `<li>${escaparHtml(item)}</li>`).join('')}</ul>
+  `;
+}
+
+function logradouroEstaCadastrado(logradouro, bairro) {
+  const termo = normalizarTexto(logradouro);
+  return logradourosDoBairro(bairro).some(item => normalizarTexto(item) === termo);
+}
+
+function validarLogradouroCadastrado(logradouro, bairro, container) {
+  if (!logradouro || !bairro) {
+    esconderListaLogradourosDisponiveis(container);
+    return true;
+  }
+
+  const logradouros = logradourosDoBairro(bairro);
+  if (logradouroEstaCadastrado(logradouro, bairro)) {
+    esconderListaLogradourosDisponiveis(container);
+    return true;
+  }
+
+  mostrarLogradourosDisponiveis(container, bairro, logradouros);
+  return false;
 }
 
 function debounceSugestao(callback, timerAtual) {
@@ -790,9 +892,9 @@ async function buscarSugestoesNominatim(consulta) {
 
 async function carregarSugestoesBairro() {
   const termo = inputBairroManual?.value.trim() || '';
+  preencherDatalist(sugestoesBairroManual, filtrarPorTermo(nomesBairrosPorciuncula(), termo));
 
   if (termo.length < 2) {
-    preencherDatalist(sugestoesBairroManual, []);
     return;
   }
 
@@ -803,7 +905,7 @@ async function carregarSugestoesBairro() {
       return address.suburb || address.neighbourhood || address.city_district || address.quarter || primeiroTrechoEndereco(item);
     });
 
-    preencherDatalist(sugestoesBairroManual, bairros);
+    preencherDatalist(sugestoesBairroManual, [...filtrarPorTermo(nomesBairrosPorciuncula(), termo), ...bairros]);
   } catch (error) {
     console.warn('Não foi possível carregar sugestões de bairro:', error);
   }
@@ -812,9 +914,10 @@ async function carregarSugestoesBairro() {
 async function carregarSugestoesLogradouro() {
   const termo = inputLogradouroManual?.value.trim() || '';
   const bairro = inputBairroManual?.value.trim() || '';
+  preencherDatalist(sugestoesLogradouroManual, filtrarPorTermo(logradourosDoBairro(bairro), termo));
+  esconderListaLogradourosDisponiveis(listaLogradourosManual);
 
   if (termo.length < 3) {
-    preencherDatalist(sugestoesLogradouroManual, []);
     return;
   }
 
@@ -828,14 +931,18 @@ async function carregarSugestoesLogradouro() {
       return address.road || address.pedestrian || address.footway || address.cycleway || primeiroTrechoEndereco(item);
     });
 
-    preencherDatalist(sugestoesLogradouroManual, logradouros);
+    preencherDatalist(sugestoesLogradouroManual, [...filtrarPorTermo(logradourosDoBairro(bairro), termo), ...logradouros]);
   } catch (error) {
     console.warn('Não foi possível carregar sugestões de logradouro:', error);
   }
 }
 
+preencherSugestoesLocais();
+
 inputBairroManual?.addEventListener('input', () => {
   timerSugestaoBairro = debounceSugestao(carregarSugestoesBairro, timerSugestaoBairro);
+  preencherDatalist(sugestoesLogradouroManual, logradourosDoBairro(inputBairroManual.value.trim()));
+  esconderListaLogradourosDisponiveis(listaLogradourosManual);
 
   if (inputLogradouroManual?.value.trim().length >= 3) {
     timerSugestaoLogradouro = debounceSugestao(carregarSugestoesLogradouro, timerSugestaoLogradouro);
@@ -902,8 +1009,10 @@ async function buscarCoordenadasPorEnderecoManual(logradouro, bairro) {
 
 function abrirConfirmacaoEndereco(endereco) {
   document.getElementById('confirm-cidade').value = CIDADE_MANUAL_LABEL;
-  document.getElementById('confirm-bairro').value = endereco.bairro || '';
-  document.getElementById('confirm-logradouro').value = endereco.logradouro || '';
+  inputConfirmBairro.value = endereco.bairro || '';
+  inputConfirmLogradouro.value = endereco.logradouro || '';
+  preencherDatalist(sugestoesLogradouroManual, logradourosDoBairro(inputConfirmBairro.value));
+  esconderListaLogradourosDisponiveis(listaLogradourosConfirmacao);
   modalConfirmarEndereco.classList.remove('hidden');
   lucide.createIcons();
 }
@@ -913,14 +1022,21 @@ async function enviarRelatoConfirmado() {
 
   const btnSubmit = document.getElementById('btn-enviar-relato');
   const textoOriginal = btnSubmit.innerText;
+  const bairroConfirmado = document.getElementById('confirm-bairro').value.trim();
+  const logradouroConfirmado = document.getElementById('confirm-logradouro').value.trim();
+
+  if (!validarLogradouroCadastrado(logradouroConfirmado, bairroConfirmado, listaLogradourosConfirmacao)) {
+    document.getElementById('confirm-logradouro').focus();
+    return;
+  }
 
   try {
     btnConfirmarEndereco.disabled = true;
     btnConfirmarEndereco.innerText = '🚀 Enviando...';
 
-    relatoPendente.bairroConfirmado = document.getElementById('confirm-bairro').value.trim();
+    relatoPendente.bairroConfirmado = bairroConfirmado;
     relatoPendente.bairro = relatoPendente.bairroConfirmado;
-    relatoPendente.logradouro = document.getElementById('confirm-logradouro').value.trim();
+    relatoPendente.logradouro = logradouroConfirmado;
     relatoPendente.rua = relatoPendente.logradouro;
     relatoPendente.cidadeConfirmada = CIDADE_PERMITIDA;
 
@@ -962,10 +1078,20 @@ btnConfirmarEndereco.addEventListener('click', enviarRelatoConfirmado);
 
 btnCancelarEndereco.addEventListener('click', () => {
   modalConfirmarEndereco.classList.add('hidden');
+  esconderListaLogradourosDisponiveis(listaLogradourosConfirmacao);
   relatoPendente = null;
   const btnSubmit = document.getElementById('btn-enviar-relato');
   btnSubmit.disabled = false;
   btnSubmit.innerText = 'Enviar para a Prefeitura';
+});
+
+inputConfirmBairro?.addEventListener('input', () => {
+  preencherDatalist(sugestoesLogradouroManual, logradourosDoBairro(inputConfirmBairro.value.trim()));
+  esconderListaLogradourosDisponiveis(listaLogradourosConfirmacao);
+});
+
+inputConfirmLogradouro?.addEventListener('input', () => {
+  esconderListaLogradourosDisponiveis(listaLogradourosConfirmacao);
 });
 
 // Envio Georreferenciado com confirmação de endereço
@@ -993,6 +1119,12 @@ formIncidente.onsubmit = async (e) => {
 
       const bairroManual = inputBairroManual.value.trim();
       const logradouroManual = inputLogradouroManual.value.trim();
+
+      if (!validarLogradouroCadastrado(logradouroManual, bairroManual, listaLogradourosManual)) {
+        inputLogradouroManual.focus();
+        throw new Error('Escolha um dos logradouros disponíveis para o bairro informado.');
+      }
+
       const coordenadasManual = await buscarCoordenadasPorEnderecoManual(logradouroManual, bairroManual);
 
       btnSubmit.innerText = "Enviando...";
